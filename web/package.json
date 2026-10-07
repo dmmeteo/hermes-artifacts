@@ -1,0 +1,19 @@
+{
+  "name": "hermes-artifacts-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.13",
+    "esbuild": "0.25.10",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@types/react-dom": "19.1.9",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  }
+}

@@ -1,0 +1,17 @@
+name: artifacts
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: "Hermes Artifacts: private artifact library with explicit, expiring guest shares. Tools gate on HERMES_ARTIFACTS_URL and HERMES_ARTIFACTS_TOKEN."
+author: Hermes Artifacts
+license: MIT
+provides_tools:
+  - artifact_publish
+  - artifact_list
+  - artifact_get
+  - artifact_download
+  - artifact_share
+  - artifact_revoke_share
+config_schema:
+  service_url: {type: secret, env: HERMES_ARTIFACTS_URL, label: "Service URL", description: "Internal URL of the artifact service, e.g. http://127.0.0.1:8080"}
+  service_token: {type: secret, env: HERMES_ARTIFACTS_TOKEN, label: "Service credential", description: "Machine credential for the artifact service management API"}

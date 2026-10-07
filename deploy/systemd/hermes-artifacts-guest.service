@@ -1,0 +1,21 @@
+# User unit for the guest-only bridge. @RELEASE@ is an immutable copy of deploy/guest_bridge.py
+# and @PYTHON@ any Python 3.11+ (stdlib only). The bridge writes no access log.
+[Unit]
+Description=Hermes Artifacts guest-only bridge (share host -> loopback service)
+After=network-online.target hermes-artifacts.service
+
+[Service]
+Type=simple
+Environment=BRIDGE_LISTEN=172.17.0.1:8081
+Environment=BRIDGE_UPSTREAM=http://127.0.0.1:8080
+# Adjust: the reverse proxy's Docker network; only peers from here may name the client in X-Forwarded-For.
+Environment=BRIDGE_TRUSTED_PROXIES=172.18.0.0/16
+ExecStart=@PYTHON@ -I @RELEASE@/guest_bridge.py
+# docker0 (172.17.0.1) may come up after the user manager: retry until it can bind.
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

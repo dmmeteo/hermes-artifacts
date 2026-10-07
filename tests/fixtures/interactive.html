@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orbit counter</title>
+<style>
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #0e2a2a; color: #f6ead9; display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+  section { padding: 24px; }
+  button { font: inherit; padding: 8px 14px; margin: 4px 4px 4px 0; border-radius: 6px; border: 1px solid #f6ead9; background: transparent; color: inherit; cursor: pointer; }
+  canvas { width: 100%; height: 220px; display: block; background: #123636; border-radius: 8px; }
+  pre { white-space: pre-wrap; font-size: 12px; background: #123636; padding: 12px; border-radius: 8px; }
+  #count { font-size: 48px; font-weight: 700; }
+</style>
+</head>
+<body>
+<section>
+  <h1>Orbit counter</h1>
+  <p>Self-contained interactive artifact. Inline script and canvas only.</p>
+  <div id="count" data-testid="count">0</div>
+  <button id="increment" type="button">Increment</button>
+  <canvas id="orbit" width="600" height="300"></canvas>
+</section>
+<section>
+  <h2>Sandbox probes</h2>
+  <button id="top-nav" type="button">Navigate top window</button>
+  <button id="popup" type="button">Open popup</button>
+  <form id="form" action="https://example.com/collect" method="post"><input name="q" value="leak"><button type="submit">Submit form</button></form>
+  <button id="self-nav" type="button">Navigate this frame away</button>
+  <img id="external-img" alt="" src="https://example.com/pixel.png" width="1" height="1">
+  <pre id="probes" data-testid="probes">running…</pre>
+</section>
+<script>
+  let count = 0;
+  const counter = document.getElementById("count");
+  document.getElementById("increment").addEventListener("click", () => { counter.textContent = String(++count); });
+
+  const canvas = document.getElementById("orbit"), ctx = canvas.getContext("2d");
+  let t = 0;
+  (function frame() {
+    t += 0.02;
+    ctx.fillStyle = "#123636"; ctx.fillRect(0, 0, 600, 300);
+    ctx.fillStyle = "#f6ead9"; ctx.beginPath(); ctx.arc(300, 150, 18, 0, 7); ctx.fill();
+    ctx.fillStyle = "#7fd6cf"; ctx.beginPath(); ctx.arc(300 + Math.cos(t) * 120, 150 + Math.sin(t) * 60, 9, 0, 7); ctx.fill();
+    requestAnimationFrame(frame);
+  })();
+
+  const results = { scripts: "ran", violations: [] };
+  document.addEventListener("securitypolicyviolation", (e) => {
+    results.violations.push(e.violatedDirective + " " + e.blockedURI);
+    render();
+  });
+  function render() { document.getElementById("probes").textContent = JSON.stringify(results, null, 1); }
+  function attempt(name, fn) { try { results[name] = "allowed: " + String(fn()).slice(0, 80); } catch (e) { results[name] = "blocked: " + e.name; } }
+
+  attempt("cookie", () => document.cookie);
+  attempt("localStorage", () => localStorage.length);
+  attempt("parentDocument", () => window.parent.document.title);
+  attempt("topLocation", () => window.top.location.href);
+  results.origin = window.origin;
+  async function fetchProbe(name, url) {
+    try { const r = await fetch(url, { credentials: "include" }); results[name] = "allowed: HTTP " + r.status; }
+    catch (e) { results[name] = "blocked: " + e.name; }
+    render();
+  }
+  fetchProbe("dashboardApi", "/api/plugins/artifacts/artifacts");
+  fetchProbe("managementApi", "/internal/v1/artifacts");
+  fetchProbe("externalFetch", "https://example.com/");
+  document.getElementById("external-img").addEventListener("error", () => { results.externalImage = "blocked"; render(); });
+  document.getElementById("external-img").addEventListener("load", () => { results.externalImage = "allowed"; render(); });
+
+  document.getElementById("top-nav").addEventListener("click", () => attemptAndRender("topNavigation", () => { window.top.location.href = "https://example.com/"; return "navigated"; }));
+  document.getElementById("popup").addEventListener("click", () => { results.popup = window.open("https://example.com/") ? "allowed: opened" : "blocked: window.open returned null"; render(); });
+  document.getElementById("self-nav").addEventListener("click", () => { location.href = "https://example.com/"; });
+  document.getElementById("form").addEventListener("submit", () => { results.formSubmitEvent = "fired"; render(); });
+  function attemptAndRender(name, fn) { attempt(name, fn); render(); }
+  render();
+</script>
+</body>
+</html>

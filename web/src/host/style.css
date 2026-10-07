@@ -1,0 +1,4 @@
+.ha-host { display: flex; min-width: 0; min-height: 320px; }
+.ha-host__frame { flex: 1 1 auto; width: 100%; border: 0; display: block; background: transparent; color-scheme: normal; }
+.ha-host--expanded { position: fixed; inset: 0; z-index: 1000; height: 100vh; height: 100dvh; background: var(--color-background, #041c1c); }
+.ha-host--expanded:popover-open { width: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; overflow: hidden; }

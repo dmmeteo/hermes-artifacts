@@ -1,0 +1,11 @@
+{
+  "name": "artifacts",
+  "label": "Artifacts",
+  "description": "Private artifact library with explicit, expiring guest shares",
+  "icon": "FileText",
+  "version": "0.1.0",
+  "tab": {"path": "/artifacts/*", "position": "after:skills"},
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}

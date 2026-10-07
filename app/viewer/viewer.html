@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>{{title}} · Hermes Artifacts</title>
+<link rel="stylesheet" href="/_viewer/viewer.css">
+<script src="/_viewer/viewer.js" defer></script>
+</head>
+<body class="viewer" data-token="{{token}}" data-kind="{{kind}}" data-expires-at="{{expires_at}}">
+<iframe id="artifact" title="{{title}}" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+<noscript><p class="noscript">This viewer needs JavaScript to display the artifact safely.</p></noscript>
+<div class="more">
+  <section id="menu" class="menu" aria-label="About this artifact" hidden>
+    <p class="menu-title" title="{{title}}">{{title}}</p>
+    <p>Link expires <time id="expiry"></time></p>
+    <p class="muted">Anyone with the link can view it. The owner can revoke it at any time.</p>
+    <a id="download" href="/{{token}}/download" download>Download</a>
+  </section>
+  <button type="button" id="menu-toggle" aria-label="Artifact menu" aria-expanded="false" aria-controls="menu"><span class="dots" aria-hidden="true"></span></button>
+</div>
+<div id="notice" class="notice-toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

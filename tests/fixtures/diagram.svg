@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240" width="480" height="240">
+  <rect width="480" height="240" fill="#f4efe6"/>
+  <g font-family="sans-serif" font-size="16" fill="#123636">
+    <rect x="20" y="90" width="120" height="60" rx="8" fill="#7fd6cf"/><text x="80" y="125" text-anchor="middle">Agent</text>
+    <rect x="180" y="90" width="120" height="60" rx="8" fill="#ffe6cb"/><text x="240" y="125" text-anchor="middle">Service</text>
+    <rect x="340" y="90" width="120" height="60" rx="8" fill="#f6b48f"/><text x="400" y="125" text-anchor="middle">Guest</text>
+    <path d="M140 120 H180 M300 120 H340" stroke="#123636" stroke-width="3"/>
+  </g>
+  <script>document.documentElement.setAttribute("data-pwned", "1")</script>
+</svg>

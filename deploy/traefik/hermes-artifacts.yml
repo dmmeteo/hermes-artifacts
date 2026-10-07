@@ -1,0 +1,44 @@
+# Traefik file-provider route for Hermes Artifacts guest links on share.example.com (replace with your host).
+# Install into Traefik's watched dynamic directory. Self-contained: every name is
+# hermes-artifacts-* and nothing from another file is referenced.
+#
+# The service listens on host loopback only. deploy/guest_bridge.py (unit
+# hermes-artifacts-guest.service) binds the Docker host gateway and forwards ONLY GET/HEAD for
+# /<token>, /<token>/content, /<token>/download and /_viewer/viewer.(css|js); every other path gets
+# the service's own "link unavailable" page and other methods get 405. Management is never reachable.
+# - accessLogs is false because every path here is a capability URL.
+# - Cookie and Authorization are removed before the bridge, which also drops them.
+# - A file router keeps the host owned even when the bridge is down: a share path then answers 502
+#   here instead of falling through to another router that logs paths.
+http:
+  routers:
+    hermes-artifacts:
+      rule: "Host(`share.example.com`)"
+      entryPoints:
+        - websecure
+      service: hermes-artifacts
+      middlewares:
+        - hermes-artifacts-guest
+      observability:
+        accessLogs: false
+      tls:
+        certResolver: letsencrypt
+
+  middlewares:
+    hermes-artifacts-guest:
+      headers:
+        customRequestHeaders:
+          Cookie: ""
+          Authorization: ""
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+        referrerPolicy: "no-referrer"
+        contentTypeNosniff: true
+        stsSeconds: 31536000
+
+  services:
+    hermes-artifacts:
+      loadBalancer:
+        servers:
+          # host.docker.internal is Traefik's host-gateway alias for 172.17.0.1, where the bridge binds.
+          - url: "http://host.docker.internal:8081"

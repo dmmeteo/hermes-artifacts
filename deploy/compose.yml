@@ -1,0 +1,47 @@
+# Example container deployment of the Hermes Artifacts service; see docs/deploy.md.
+# The management API is published only on host loopback (Hermes dashboard and agents).
+# A reverse proxy on the external `proxy` network should route only the guest viewer surface.
+name: hermes-artifacts
+services:
+  hermes-artifacts:
+    image: hermes-artifacts:${REVISION:?set REVISION to the git revision being deployed}
+    build:
+      context: ..
+      args:
+        REVISION: ${REVISION}
+    container_name: hermes-artifacts
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 128
+    environment:
+      ARTIFACTS_PUBLIC_URL: ${ARTIFACTS_PUBLIC_URL:?public base URL of share links, e.g. https://share.example.com}
+      ARTIFACTS_API_TOKEN_FILE: /run/secrets/artifacts_api_token
+      ARTIFACTS_TRUSTED_PROXIES: ${ARTIFACTS_TRUSTED_PROXIES:-172.18.0.0/16}
+    secrets:
+      - artifacts_api_token
+    volumes:
+      - hermes-artifacts-data:/data
+    ports:
+      - "127.0.0.1:${ARTIFACTS_HOST_PORT:-8787}:8080"
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "false"
+      org.opencontainers.image.revision: ${REVISION}
+
+secrets:
+  artifacts_api_token:
+    file: ${ARTIFACTS_API_TOKEN_FILE:?path to a 0600 file holding the service credential}
+
+volumes:
+  hermes-artifacts-data:
+    name: hermes-artifacts-data
+
+networks:
+  proxy:
+    external: true
