@@ -16,67 +16,21 @@ Agents outside Hermes use the [machine API](docs/api.md) directly.
 
 ## Quickstart
 
-This runs the service on loopback with a throwaway database and a credential generated on the spot. You need [uv](https://docs.astral.sh/uv/), `curl` and `jq`. uv installs Python 3.14 if it is missing.
+You need [git](https://git-scm.com/) and [uv](https://docs.astral.sh/uv/). uv installs Python 3.14 and the dependencies on first run.
 
 ```sh
 git clone https://github.com/dmmeteo/hermes-artifacts.git
 cd hermes-artifacts
-uv sync --frozen
-
-mkdir -p .local && chmod 700 .local
-uv run --frozen python -c 'import secrets; print(secrets.token_urlsafe(32))' > .local/api-token
-chmod 600 .local/api-token
-
-export ARTIFACTS_PORT=8080
-export ARTIFACTS_API_TOKEN_FILE="$PWD/.local/api-token"
-export ARTIFACTS_DB="$PWD/.local/artifacts.db"
-export ARTIFACTS_PUBLIC_URL="http://127.0.0.1:$ARTIFACTS_PORT"
-uv run --frozen python -m app
+uv run --frozen python -m app.local
 ```
 
-In a second terminal in the same directory, publish an artifact, share it, open the link, then revoke it:
+Open the console URL it prints, `http://127.0.0.1:8080/console/`, and sign in as `operator` with the password shown in your terminal. The password is shown only on the first start and is never stored; `--new-password` replaces it. The service listens on loopback only. Stop it with Ctrl-C; the next run reuses the same library and login from `.local/` (git-ignored, private). The console starts empty: agents publish through the [Hermes plugin](docs/hermes.md) or the [machine API](docs/api.md) with the token in `.local/api-token`.
 
-```sh
-BASE=http://127.0.0.1:8080
-AUTH="Authorization: Bearer $(cat .local/api-token)"
-
-curl -fsS "$BASE/healthz"; echo                             # {"status":"ok"}
-
-ID=$(printf '# Hello\n\nMy first artifact.\n' |
-  curl -fsS -X POST "$BASE/internal/v1/artifacts?title=Hello&kind=markdown&source_profile=demo" \
-    -H "$AUTH" -H 'Content-Type: text/markdown' --data-binary @- | jq -r .id)
-
-SHARE=$(curl -fsS -X POST "$BASE/internal/v1/artifacts/$ID/shares" \
-  -H "$AUTH" -H 'Content-Type: application/json' -d '{"expires_in_seconds": 3600}')
-URL=$(echo "$SHARE" | jq -r .url); SHARE_ID=$(echo "$SHARE" | jq -r .share.id)
-echo "$URL"                                                 # open it in a browser
-
-curl -s -o /dev/null -w '%{http_code}\n' "$URL"             # 200
-curl -fsS -X DELETE "$BASE/internal/v1/shares/$SHARE_ID" -H "$AUTH" | jq -r .share.status   # revoked
-curl -s -o /dev/null -w '%{http_code}\n' "$URL"             # 404
-curl -s -o /dev/null -w '%{http_code}\n' "$BASE/internal/v1/artifacts"   # 401 without the credential
-```
-
-Stop the service with Ctrl-C. Everything it wrote is in `.local/` (git-ignored); delete that folder to start over.
-
-### Turn on the standalone console
-
-Create a login, then restart the service with the console enabled. The console origin must be `https`, except on loopback.
-
-```sh
-PASSWORD=$(uv run --frozen python -c 'import secrets; print(secrets.token_urlsafe(18))')
-printf '%s\n' "$PASSWORD" | uv run --frozen python -m app.hash_password operator > .local/htpasswd
-chmod 600 .local/htpasswd
-
-ARTIFACTS_CONSOLE_ORIGIN="http://127.0.0.1:$ARTIFACTS_PORT" \
-ARTIFACTS_CONSOLE_HTPASSWD_FILE="$PWD/.local/htpasswd" \
-uv run --frozen python -m app
-```
-
-Open `http://127.0.0.1:8080/console/` and sign in as `operator` with the generated password (`echo "$PASSWORD"` in that terminal). Without the login, `/console/` answers 401. For your own password, run `uv run python -m app.hash_password operator`; it prompts without echo.
+[Running locally](docs/local.md) covers the launcher's options and failure rules, the manual setup and a `curl` walkthrough of publish, share and revoke.
 
 ## Documentation
 
+- [Running locally](docs/local.md): the one-command launcher, manual setup and a first walkthrough of the machine API.
 - [Configuration](docs/configuration.md): every environment variable, the console login and its fail-closed rules.
 - [Machine API](docs/api.md): publish, list, share and revoke over HTTP, with examples.
 - [Hermes integration](docs/hermes.md): install the plugin, agent tools and the operating skill.

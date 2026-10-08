@@ -162,6 +162,7 @@ hermes-artifacts/
     console.py              optional standalone console: login guard, Origin/header checks, /console routes
     config.py, __main__.py  settings from env (console fails closed), uvicorn entrypoint
     hash_password.py        `python -m app.hash_password USER` prints an htpasswd line
+    local.py                `python -m app.local`: private .local/ state, then the service on loopback
     console/                built shared panel served at /console/
     backup.py               `python -m app.backup DEST`
     viewer/                 guest shell (plain HTML/CSS/JS)

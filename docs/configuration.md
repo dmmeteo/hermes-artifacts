@@ -2,6 +2,8 @@
 
 The service reads its configuration from the environment at startup (`app/config.py`, `app/__main__.py`). It refuses to start on an invalid or unsafe setting rather than falling back.
 
+To try it on your own machine without setting any of this, use the launcher in [local.md](local.md).
+
 ## Service
 
 | Variable | Default | Meaning |
