@@ -484,7 +484,8 @@ def guest_preservation(service_restart, origin: str, token: str, published: dict
 def recipe(folder: Path) -> None:
     helper = PROJECT / ".claude" / "skills" / "verify-hermes-artifacts" / "scripts" / "recipe.py"
     scratch = SCRATCH / "runtime" / "recipe"
-    env = {**{k: v for k, v in os.environ.items() if not k.startswith("HERMES_")}, "ARTIFACTS_SCRATCH": str(SCRATCH)}
+    env = {**{k: v for k, v in os.environ.items() if not k.startswith("HERMES_")}, "ARTIFACTS_SCRATCH": str(SCRATCH),
+           "HERMES_CHECKOUT": str(HERMES_CHECKOUT)}
     for step in ("launch", "doctor", "drive", "cleanup"):
         result = subprocess.run([sys.executable, str(helper), step, "--root", str(scratch)], cwd=PROJECT, env=env,
                                 capture_output=True, text=True, timeout=600)
