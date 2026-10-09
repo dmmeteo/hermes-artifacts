@@ -169,7 +169,7 @@ def test_publish_share_revoke_roundtrip(tools, configured, tmp_path):
 
 
 def test_share_refuses_hours_that_are_not_a_finite_number(tools, configured):
-    for hours in ("inf", "nan", "soon", -1):
+    for hours in ("inf", "nan", "soon", -1, 1e305):
         result = call(tools, "artifact_share", {"artifact_id": "00000000-0000-4000-8000-000000000000",
                                                 "expires_in_hours": hours})
         assert result["error"]["code"] == "invalid_arguments", (hours, result)

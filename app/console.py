@@ -142,10 +142,11 @@ class ConsoleGuard:
 
         async def private(message):
             if message["type"] == "http.response.start":
-                names = {name.lower() for name, _ in message["headers"]}
-                message["headers"] = list(message["headers"]) + [
-                    (name.encode(), value.encode()) for name, value in API_HEADERS.items()
-                    if name.lower().encode() not in names]
+                headers = list(message.get("headers", []))
+                names = {name.lower() for name, _ in headers}
+                message["headers"] = headers + [(name.lower().encode(), value.encode())
+                                                for name, value in API_HEADERS.items()
+                                                if name.lower().encode() not in names]
             await send(message)
 
         return await self.app(scope, receive, private)

@@ -146,7 +146,7 @@ def share(service: ArtifactService, args: dict, context: dict) -> dict:
             value = float(hours)
         except (TypeError, ValueError):
             raise ValueError("expires_in_hours must be a number of hours") from None
-        if not math.isfinite(value) or value <= 0:
+        if not math.isfinite(value * 3600) or value <= 0:
             raise ValueError("expires_in_hours must be a positive, finite number of hours")
         seconds = int(value * 3600)
     grant = service.share(str(args.get("artifact_id") or ""), seconds)
