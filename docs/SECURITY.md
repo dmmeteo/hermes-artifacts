@@ -25,7 +25,8 @@
 | Password guessing | 20 bcrypt verifications per client per minute, then 429; verified headers cached 5 minutes under an HMAC with a per-process random key | `test_failed_logins_are_rate_limited` |
 | Console on the guest host | The guard answers only when `Host` equals the configured origin's host; elsewhere `/console` is the unavailable page | `test_console_only_answers_on_its_own_host` |
 | Credentials in the Hermes-hosted panel | The panel iframe receives no token. It asks the host tab, by `postMessage` restricted to the same origin and the host's own window, to fetch one of eight allowlisted API shapes with `authedFetch`; hostile slugs and unknown paths are ignored or answered 400 | `verify_concept.py`: message, storage and URL secret scans; hostile navigate and request checks |
-| Resource exhaustion | 10 MiB per artifact (declared length rejected early, stream capped), list pages ≤ 100, uvicorn concurrency limit, per-client token bucket with a bounded table, 32 MiB client response cap; container memory and pid limits | `test_publish_enforces_size_limit`, `test_public_rate_limit_is_bounded` |
+| Resource exhaustion | 10 MiB per artifact (declared length rejected early, stream capped), other management and console bodies need a declared length (chunked bodies get 411), list pages ≤ 100, uvicorn concurrency limit, per-client token bucket with a bounded table, 32 MiB client response cap, guest-bridge connections time out after 10 s idle; container memory and pid limits | `test_publish_enforces_size_limit`, `test_public_rate_limit_is_bounded`, `test_bodies_without_a_declared_length_are_refused_except_the_streamed_publish`, `test_idle_guest_connections_are_closed` |
+| Library at rest | A new database and every `app.backup` copy are created 0600 in a 0700 folder whatever the umask; backups open the source read-only | `test_library_and_backup_files_are_owner_only_whatever_the_umask`, `test_backup_command_copies_without_touching_the_source` |
 
 ## Read-only security review (2026-10-06)
 
@@ -56,6 +57,24 @@ A native read-only reviewer subagent read the diff from pre-release development 
 | 5 | Console origin may equal the guest origin | Info | **Accepted by product decision** (one host may serve both). Guest pages are trusted static code; artifacts stay opaque-origin |
 | 6 | An origin with an explicit default port never matched the browser's `Host` | Info | **Fixed**: default ports are normalised away |
 
+## Launch audit (2026-10-09)
+
+Two independent read-only reviews (security; release and verification integrity) read the public tree at `a4e6690`. Neither found a critical, high or medium security issue. Fixed in this release unless marked otherwise:
+
+| # | Finding | Severity | Disposition |
+|---|---|---|---|
+| 1 | Library database and backups inherited the process umask (often world-readable) | Low | **Fixed**: created 0600 in a 0700 folder; existing files are left as they are, so `chmod 600` an older library yourself |
+| 2 | Chunked bodies skipped the declared-length cap on the share routes (authenticated memory exhaustion) | Low | **Fixed**: 411 unless the route is the streamed, capped publish |
+| 3 | Guest bridge kept idle connections and their threads forever | Low | **Fixed**: 10 s socket timeout |
+| 4 | `?theme=` errors on guest routes answered 422 JSON before the link check and rate limit | Info | **Fixed**: unknown themes fall back to light after the link check |
+| 5 | A title containing `{{token}}`-style text was substituted in the guest shell | Info | **Fixed**: one-pass substitution (no injection was possible: values are escaped or constrained) |
+| 6 | `artifact_share` raised on infinite or non-numeric hours | Info | **Fixed**: `invalid_arguments` |
+| 7 | Console API answers lacked `no-store` and `nosniff` | Info | **Fixed** |
+| 8 | Agent file tools publish any readable file and download to any writable path, so a prompt-injected agent could publish its own `.env` | Low | **Accepted residual.** The agent already has general file tools; the plugin does not widen that. Shares remain explicit, visible and revocable |
+| 9 | Uvicorn has no request-header timeout; 64 slow connections exhaust the service | Low | **Accepted with deployment rule**: never expose the service port directly; put the guest bridge or a timing-out proxy in front |
+| 10 | `ARTIFACTS_PUBLIC_URL` is not validated; Markdown re-renders on every view; the access log keeps private slugs of `/console/<slug>`; a trailing slash on a guest path gets the framework's 307 | Info | **Accepted**: operator configuration, rate-limited, operator-only log, no token information disclosed |
+| 11 | The CSP and sandbox behaviour is proven by UAT on Chromium only | Gap | **Open**: Firefox and Safari are expected to fail closed but are not tested |
+
 ## Residual limitations
 
 - Basic authentication has no server-side logout. A browser keeps the credential until it is closed; rotate the hash to revoke every browser at once.
@@ -66,3 +85,5 @@ A native read-only reviewer subagent read the diff from pre-release development 
 - A shared link is a bearer capability. Forwarding it grants access, and revocation cannot recall downloaded copies.
 - Fullscreen belongs to the trusted wrapper. Artifacts cannot request it themselves.
 - Browsers without `Sec-Fetch-Dest` (pre-2023 Safari) are redirected to the shell and therefore cannot show guest content. They fail closed.
+- The service has no request-header timeout of its own. Do not expose its port to the internet; front it with the guest bridge or a proxy that times out slow clients.
+- Agent file tools can publish any file the agent can read. A prompt-injected agent could publish a secret it can reach; sharing it still needs a separate, visible, revocable share.
