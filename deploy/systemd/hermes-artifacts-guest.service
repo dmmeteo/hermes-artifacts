@@ -16,6 +16,9 @@ Restart=always
 RestartSec=5
 UMask=0077
 NoNewPrivileges=true
+# Each guest connection holds a thread and its buffered response (up to the artifact limit).
+MemoryMax=512M
+TasksMax=256
 
 [Install]
 WantedBy=default.target
