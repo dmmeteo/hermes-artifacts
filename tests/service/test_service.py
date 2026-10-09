@@ -240,6 +240,14 @@ def test_share_expiry_bounds_are_validated(client):
     assert missing.status_code == 404
 
 
+def test_share_body_must_be_declared_json(client):
+    artifact = publish(client, b"<p>x</p>", "html")
+    untyped = client.post(f"/internal/v1/artifacts/{artifact['id']}/shares", content=b'{"expires_in_seconds": 60}',
+                          headers=AUTH)
+    assert untyped.status_code == 422
+    assert client.get(f"/internal/v1/artifacts/{artifact['id']}", headers=AUTH).json()["shares"] == []
+
+
 def test_render_policies_per_kind(client):
     md = publish(client, b"# Title\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1))", "markdown")
     rendered = client.get(f"/internal/v1/artifacts/{md['id']}/render", headers=AUTH).text

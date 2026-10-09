@@ -49,7 +49,7 @@ curl -fsS "$BASE/internal/v1/artifacts/$ID/download" -H "$AUTH" -o copy.html
 
 ## Share
 
-`POST /internal/v1/artifacts/{id}/shares` with an optional JSON body `{"expires_in_seconds": N}`. Without a body the default expiry applies (7 days); `N` must be between 1 and `ARTIFACTS_MAX_SHARE_SECONDS`.
+`POST /internal/v1/artifacts/{id}/shares` with an optional JSON body `{"expires_in_seconds": N}`, sent with `Content-Type: application/json` (a body without it is refused with 422). Without a body the default expiry applies (7 days); `N` must be between 1 and `ARTIFACTS_MAX_SHARE_SECONDS`.
 
 ```sh
 curl -fsS -X POST "$BASE/internal/v1/artifacts/$ID/shares" \
