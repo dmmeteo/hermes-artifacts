@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import json
 import os
 import re
@@ -139,7 +140,15 @@ def download(service: ArtifactService, args: dict, context: dict) -> dict:
 @_tool
 def share(service: ArtifactService, args: dict, context: dict) -> dict:
     hours = args.get("expires_in_hours")
-    seconds: Optional[int] = None if hours in (None, "") else int(float(hours) * 3600)
+    seconds: Optional[int] = None
+    if hours not in (None, ""):
+        try:
+            value = float(hours)
+        except (TypeError, ValueError):
+            raise ValueError("expires_in_hours must be a number of hours") from None
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("expires_in_hours must be a positive, finite number of hours")
+        seconds = int(value * 3600)
     grant = service.share(str(args.get("artifact_id") or ""), seconds)
     return {
         **grant,

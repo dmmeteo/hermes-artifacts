@@ -168,6 +168,13 @@ def test_publish_share_revoke_roundtrip(tools, configured, tmp_path):
     assert again["error"]["message"] == f"{target} exists; pass overwrite=true to replace it"
 
 
+def test_share_refuses_hours_that_are_not_a_finite_number(tools, configured):
+    for hours in ("inf", "nan", "soon", -1):
+        result = call(tools, "artifact_share", {"artifact_id": "00000000-0000-4000-8000-000000000000",
+                                                "expires_in_hours": hours})
+        assert result["error"]["code"] == "invalid_arguments", (hours, result)
+
+
 def test_service_errors_surface_to_the_agent(tools, configured, monkeypatch):
     missing = call(tools, "artifact_get", {"artifact_id": "00000000-0000-4000-8000-000000000000"})
     assert missing == {"error": {"code": "not_found", "message": "artifact not found"}}
