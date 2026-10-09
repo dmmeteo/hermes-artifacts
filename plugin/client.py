@@ -6,6 +6,7 @@ returned to callers, logged, or placed in a URL.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.error
@@ -91,7 +92,7 @@ class ArtifactService:
                 raise ServiceError(exc.code, error["code"], error["message"]) from None
             except (ValueError, KeyError, TypeError, UnicodeDecodeError):
                 raise ServiceError(exc.code, "service_error", f"artifact service returned HTTP {exc.code}") from None
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError) as exc:
             reason = getattr(exc, "reason", exc)
             raise ServiceError(502, "service_unreachable", f"artifact service is unreachable: {reason}") from None
 

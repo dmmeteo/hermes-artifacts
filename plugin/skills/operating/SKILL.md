@@ -34,8 +34,10 @@ One shared, private library holds every artifact. No agent or profile owns it. `
 
 - `not_configured`: `HERMES_ARTIFACTS_URL` and `HERMES_ARTIFACTS_TOKEN` are missing for this profile. Tell the user; do not guess values.
 - `service_unreachable`: the artifact service is down or the URL is wrong.
-- `service_auth_failed`: the configured token was rejected; the operator must fix it.
-- `invalid_artifact`: wrong kind for the bytes, too large (10 MiB default) or a bad title.
+- `unauthorized`: the configured token was rejected; the operator must fix it.
+- `invalid_artifact`: wrong kind for the bytes, empty content or a bad title.
+- `too_large`: the content exceeds the service limit (10 MiB default).
+- `invalid_arguments`: the tool call itself is wrong (for example both or neither of `path` and `content`, an unknown extension, or a file that does not exist).
 - `not_found`: unknown id, slug or share id.
 
 ## Secrets

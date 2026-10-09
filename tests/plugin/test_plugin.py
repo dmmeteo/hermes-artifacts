@@ -177,6 +177,29 @@ def test_service_errors_surface_to_the_agent(tools, configured, monkeypatch):
     assert call(tools, "artifact_list", {})["error"]["code"] == "service_unreachable"
 
 
+def test_a_broken_http_reply_is_reported_not_raised(tools, monkeypatch):
+    import socket
+    import threading
+
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+
+    def answer():
+        conn, _ = server.accept()
+        conn.recv(65536)
+        conn.sendall(b"NOT-HTTP\r\n\r\n")
+        conn.close()
+
+    threading.Thread(target=answer, daemon=True).start()
+    monkeypatch.setenv("HERMES_ARTIFACTS_URL", f"http://127.0.0.1:{server.getsockname()[1]}")
+    monkeypatch.setenv("HERMES_ARTIFACTS_TOKEN", TOKEN)
+    try:
+        assert call(tools, "artifact_list", {})["error"]["code"] == "service_unreachable"
+    finally:
+        server.close()
+
+
 def test_dashboard_routes_forward_and_never_return_markup_as_html(dashboard, tools):
     published = call(tools, "artifact_publish", {"content": "<script>parent.x=1</script>", "kind": "html",
                                                  "title": "Script"})
