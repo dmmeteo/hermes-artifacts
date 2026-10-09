@@ -4,8 +4,15 @@ The subscription credential is resolved read-only from the operator profile in a
 child process and piped to the agent runner's stdin; it is never printed, logged,
 or written. Evidence goes to evidence/agent-smoke/report.json with capability
 tokens redacted. Usage: python scripts/agent_smoke.py [--max-turns 15]
+
+Split placement, when the browser host must not hold the credential: on the browser host set
+ARTIFACTS_SMOKE_EXCHANGE=<dir>; the smoke writes <dir>/request.json (service URL and the synthetic
+machine token) and waits for <dir>/outcome.json. On the credential host, forward the service port and run
+`python scripts/agent_smoke.py --runner <dir>` on a copy of request.json; it writes outcome.json, which
+carries the credential-free runner output and the files the agent wrote. Every check still runs.
 """
 
+import base64
 import hashlib
 import json
 import os
@@ -13,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -20,11 +28,14 @@ import yaml
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from runtime import HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, Runtime, host_status, refuse_live  # noqa: E402
+from runtime import (HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, Runtime, host_status,  # noqa: E402
+                     install_plugin, refuse_live)
 
 # The Hermes profile whose model and subscription credential the smoke borrows (read-only).
 OPERATOR_HOME = Path(os.environ.get("HERMES_SMOKE_PROFILE", Path.home() / ".hermes")).expanduser()
 EVIDENCE = SCRATCH / "evidence" / "agent-smoke"
+EXCHANGE = os.environ.get("ARTIFACTS_SMOKE_EXCHANGE")
+RUNNER_WAIT = 1500
 TOKEN_RE = re.compile(r"(?<=/)[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])")
 RESOLVE = (
     "import json, sys\n"
@@ -82,10 +93,86 @@ def get(url: str, token: str | None = None) -> tuple[int, bytes]:
         return exc.code, exc.read()
 
 
+def git_identity() -> dict:
+    run = lambda *a: subprocess.run(["git", "-C", str(PROJECT), *a], capture_output=True, text=True).stdout.strip()  # noqa: E731
+    return {"revision": run("rev-parse", "HEAD"), "dirty": run("status", "--porcelain") != ""}
+
+
+def run_agent(work: Path, hermes_home: Path, max_turns: int) -> dict:
+    """Resolve the subscription credential read-only and run one bounded agent. The record is credential-free."""
+    model = yaml.safe_load((OPERATOR_HOME / "config.yaml").read_text())["model"]["default"]
+    resolved = subprocess.run(
+        [str(HERMES_PYTHON), "-c", RESOLVE], cwd=HERMES_CHECKOUT, capture_output=True, text=True, timeout=60,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "HERMES_HOME": str(OPERATOR_HOME)},
+    )
+    if resolved.returncode != 0:
+        return {"model": model,
+                "blocker": "read-only credential resolution failed: " + resolved.stderr.strip().splitlines()[-1][:300]}
+    credentials = json.loads(resolved.stdout)
+    credentials["model"] = model
+    runner = subprocess.run(
+        [str(HERMES_PYTHON), str(PROJECT / "scripts" / "agent_runner.py"), str(work), str(max_turns)],
+        cwd=work, input=json.dumps(credentials) + "\n", capture_output=True, text=True, timeout=1200,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "HERMES_HOME": str(hermes_home)},
+    )
+    secret = credentials.pop("api_key")
+    del credentials
+    record = {"model": model, "returncode": runner.returncode, "credential_absent": secret not in runner.stdout,
+              "stdout": runner.stdout.replace(secret, "<redacted>"),
+              "stderr": runner.stderr.replace(secret, "<redacted>")}
+    del secret
+    return record
+
+
+def serve_runner(exchange: Path) -> int:
+    """Credential host half of the split smoke: run the agent against the forwarded service."""
+    request = json.loads((exchange / "request.json").read_text())
+    root = SCRATCH / "runtime" / "agent-runner"
+    if root.exists():
+        shutil.rmtree(root)
+    work = root / "agent-work"
+    work.mkdir(parents=True)
+    os.chmod(root, 0o700)
+    host_before = host_status()
+    hermes_home = root / "hermes-home"
+    install_plugin(hermes_home, request["service_url"], request["token"])
+    try:
+        record = run_agent(work, hermes_home, min(int(request["max_turns"]), 15))
+    finally:
+        record_files = {p.name: base64.b64encode(p.read_bytes()).decode() for p in work.iterdir() if p.is_file()}
+        shutil.rmtree(root)
+    record.update(files=record_files, runner=git_identity(), runner_plugin_tree_sha256=plugin_tree_hash(),
+                  runner_checkout_unchanged=host_status() == host_before)
+    target = exchange / "outcome.json"
+    target.with_suffix(".tmp").write_text(json.dumps(record))
+    target.with_suffix(".tmp").rename(target)
+    print("runner returncode", record.get("returncode"), "blocker" if "blocker" in record else "")
+    return 0
+
+
+def run_agent_remotely(exchange: Path, rt: Runtime, work: Path, max_turns: int) -> dict:
+    request = exchange / "request.json"
+    request.write_text(json.dumps({"service_url": rt.service_url, "token": rt.token, "max_turns": max_turns}))
+    os.chmod(request, 0o600)
+    outcome = exchange / "outcome.json"
+    deadline = time.monotonic() + RUNNER_WAIT
+    while not outcome.exists():
+        if time.monotonic() > deadline:
+            return {"blocker": f"no runner outcome within {RUNNER_WAIT}s"}
+        time.sleep(2)
+    record = json.loads(outcome.read_text())
+    for name, content in record.pop("files", {}).items():
+        if "/" not in name and name not in ("", ".", ".."):
+            (work / name).write_bytes(base64.b64decode(content))
+    return record
+
+
 def main() -> int:
     refuse_live(SCRATCH)
     if "--reevaluate" in sys.argv:
         return reevaluate()
+    if "--runner" in sys.argv:
+        return serve_runner(Path(sys.argv[sys.argv.index("--runner") + 1]))
     max_turns = int(sys.argv[sys.argv.index("--max-turns") + 1]) if "--max-turns" in sys.argv else 15
     if max_turns > 15:
         raise SystemExit("the authorized smoke is bounded to 15 agent turns")
@@ -97,43 +184,33 @@ def main() -> int:
         shutil.rmtree(root)
     rt = Runtime(root)
     host_before = host_status()
-    model = yaml.safe_load((OPERATOR_HOME / "config.yaml").read_text())["model"]["default"]
     checks = []
-    report: dict = {"plugin_tree_sha256": plugin_tree_hash(), "model": model, "max_turns": max_turns,
-                    "revision": subprocess.run(["git", "-C", str(PROJECT), "rev-parse", "HEAD"],
-                                               capture_output=True, text=True).stdout.strip(),
-                    "dirty": subprocess.run(["git", "-C", str(PROJECT), "status", "--porcelain"],
-                                            capture_output=True, text=True).stdout.strip() != ""}
+    identity = git_identity()
+    report: dict = {"plugin_tree_sha256": plugin_tree_hash(), "max_turns": max_turns, **identity,
+                    "runner_placement": "split" if EXCHANGE else "local"}
     try:
         rt.prepare()
         work = root / "agent-work"
         work.mkdir()
         rt.start_service()
         rt.start_dashboard()
-        resolved = subprocess.run(
-            [str(HERMES_PYTHON), "-c", RESOLVE], cwd=HERMES_CHECKOUT, capture_output=True, text=True, timeout=60,
-            env={"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "HERMES_HOME": str(OPERATOR_HOME)},
-        )
-        if resolved.returncode != 0:
-            report["blocker"] = "read-only credential resolution failed: " + resolved.stderr.strip().splitlines()[-1][:300]
+        record = (run_agent_remotely(Path(EXCHANGE), rt, work, max_turns) if EXCHANGE
+                  else run_agent(work, rt.hermes_home, max_turns))
+        report["model"] = record.get("model")
+        if "blocker" in record:
+            report["blocker"] = record["blocker"]
             raise RuntimeError(report["blocker"])
-        credentials = json.loads(resolved.stdout)
-        credentials["model"] = model
-        runner = subprocess.run(
-            [str(HERMES_PYTHON), str(PROJECT / "scripts" / "agent_runner.py"), str(work), str(max_turns)],
-            cwd=work, input=json.dumps(credentials) + "\n", capture_output=True, text=True, timeout=1200,
-            env={"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "HERMES_HOME": str(rt.hermes_home)},
-        )
-        secret = credentials.pop("api_key")
-        del credentials
-        stderr_clean = runner.stderr.replace(secret, "<redacted>")
-        (root / "logs" / "agent-runner.err").write_text(stderr_clean)
-        if runner.returncode != 0 or not runner.stdout.strip():
-            report["blocker"] = "agent runner failed: " + stderr_clean.strip()[-800:]
+        if EXCHANGE:
+            checks.append(("runner host ran the same clean revision and plugin",
+                           record["runner"] == identity and record["runner_plugin_tree_sha256"] == plugin_tree_hash(),
+                           record["runner"]))
+            checks.append(("runner host Hermes checkout unchanged", record["runner_checkout_unchanged"], None))
+        (root / "logs" / "agent-runner.err").write_text(record["stderr"])
+        if record["returncode"] != 0 or not record["stdout"].strip():
+            report["blocker"] = "agent runner failed: " + record["stderr"].strip()[-800:]
             raise RuntimeError(report["blocker"])
-        outcome = json.loads(runner.stdout.strip().splitlines()[-1])
-        checks.append(("credential never appears in runner output", secret not in runner.stdout, None))
-        del secret
+        outcome = json.loads(record["stdout"].strip().splitlines()[-1])
+        checks.append(("credential never appears in runner output", record["credential_absent"], None))
         report["agent"] = redact(outcome)
         invoked = invoked_tools(outcome["tool_calls"])
         checks.append(("agent stayed within the turn budget", (outcome.get("api_calls") or 0) <= max_turns,

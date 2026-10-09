@@ -54,6 +54,11 @@ These drive the real app and need more of the environment. They write only under
 
 `scripts/verify.py` runs every gate in order and fails if any fails. One gate checks that a recorded agent smoke matches the current plugin and backend source; it fails until `agent_smoke.py` has been run on the current revision. The project's own driving recipe is `.claude/skills/verify-hermes-artifacts/SKILL.md`.
 
+When the browser host should not run Docker or hold the agent credential, split the same gates without dropping any:
+
+- Run `scripts/container_smoke.py` on the Docker host in the same clean checkout. It keeps its report, with the full revision, in `$ARTIFACTS_SCRATCH/evidence/container-smoke/report.json`. Then run `scripts/verify.py --container-smoke-report <that file>` on the browser host; the gate passes only for a passing report of the same clean revision.
+- Run `scripts/agent_smoke.py` on the browser host with `ARTIFACTS_SMOKE_EXCHANGE=<dir>`. It starts the service, dashboard and browser there, writes `<dir>/request.json` and waits for the agent's outcome. On the credential host, forward the service port to the same loopback port, copy `request.json` into a local folder and run `scripts/agent_smoke.py --runner <folder>`; copy the resulting `outcome.json` back into `<dir>`. The credential never leaves the credential host, and both hosts must be at the same clean revision.
+
 Do not mark a gate as passing that you did not run. In a pull request, list the commands you ran and their results.
 
 ## Style

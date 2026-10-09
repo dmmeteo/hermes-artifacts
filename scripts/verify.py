@@ -4,6 +4,10 @@ Runs every required gate against isolated loopback runtimes and labeled Docker
 resources only. Each gate's output is kept under
 <scratch>/evidence/verify/<timestamp>-<revision>/. Exits 1 if any gate fails;
 no gate is skipped silently.
+
+`--container-smoke-report PATH` is for a browser host without Docker: instead of building the image
+itself, the gate accepts a report that scripts/container_smoke.py wrote for this exact clean revision
+on a Docker host. The summary records which form the gate took.
 """
 
 from __future__ import annotations
@@ -126,7 +130,17 @@ def main() -> int:
                   [sys.executable, str(PROJECT / "scripts" / "uat.py")], expect_in_output="0 failed")
     gates.command("concept gate: standalone and embedded hosts, auth negative controls, packaged skill",
                   [sys.executable, str(PROJECT / "scripts" / "verify_concept.py")], expect_in_output=" 0 failed at ")
-    gates.command("container build and smoke", [sys.executable, str(PROJECT / "scripts" / "container_smoke.py")])
+    if "--container-smoke-report" in sys.argv:
+        path = Path(sys.argv[sys.argv.index("--container-smoke-report") + 1])
+        recorded = json.loads(path.read_text()) if path.is_file() else {}
+        gates.record("container build and smoke (recorded on a Docker host for this revision)",
+                     recorded.get("passed") is True and recorded.get("revision") == revision
+                     and recorded.get("dirty") is False and not dirty
+                     and bool(recorded.get("checks")) and all(c.get("ok") for c in recorded["checks"]),
+                     {"evidence": str(path), "revision": recorded.get("revision"), "image_id": recorded.get("image_id"),
+                      "dirty": recorded.get("dirty"), "checks": len(recorded.get("checks") or [])})
+    else:
+        gates.command("container build and smoke", [sys.executable, str(PROJECT / "scripts" / "container_smoke.py")])
 
     smoke = json.loads((SMOKE_EVIDENCE / "report.json").read_text()) if (SMOKE_EVIDENCE / "report.json").exists() else {}
     evidence = agent_evidence(smoke)

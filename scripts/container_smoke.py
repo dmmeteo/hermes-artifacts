@@ -1,10 +1,12 @@
 """Build the image and smoke-test it in an isolated, labeled container.
 
 Docker resources carry the label artifacts-build=hermes-artifacts-uat and are
-removed afterwards. Prints a JSON report; exits 1 on any failed check.
+removed afterwards. Prints a JSON report and keeps it, with the full revision, in
+<scratch>/evidence/container-smoke/report.json; exits 1 on any failed check.
 """
 
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -17,6 +19,7 @@ PROJECT = Path(__file__).resolve().parent.parent
 LABEL = "artifacts-build=hermes-artifacts-uat"
 NAME = "hermes-artifacts-uat"
 FIXTURE = PROJECT / "tests" / "fixtures" / "chart.webp"
+SCRATCH = Path(os.environ.get("ARTIFACTS_SCRATCH", PROJECT / ".scratch")).expanduser()
 
 
 def docker(*args: str, check: bool = True) -> str:
@@ -43,14 +46,18 @@ def cleanup() -> None:
 
 
 def main() -> int:
-    revision = subprocess.run(["git", "-C", str(PROJECT), "rev-parse", "--short", "HEAD"], capture_output=True,
-                              text=True).stdout.strip()
+    full = subprocess.run(["git", "-C", str(PROJECT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    dirty = subprocess.run(["git", "-C", str(PROJECT), "status", "--porcelain"], capture_output=True,
+                           text=True).stdout.strip() != ""
+    revision = full[:7]
     tag = f"hermes-artifacts:uat-{revision}"
+    image_id = None
     checks = []
     token = secrets.token_urlsafe(32)
     cleanup()
     try:
         docker("build", "-q", "--label", LABEL, "--build-arg", f"REVISION={revision}", "-t", tag, str(PROJECT))
+        image_id = docker("image", "inspect", tag, "--format", "{{.Id}}")
         size = int(docker("image", "inspect", tag, "--format", "{{.Size}}"))
         user = docker("image", "inspect", tag, "--format", "{{.Config.User}}")
         checks.append(("image runs as a non-root user", user == "artifacts", user))
@@ -59,6 +66,7 @@ def main() -> int:
         docker("volume", "create", "--label", LABEL, f"{NAME}-data")
         port = 18000 + secrets.randbelow(2000)
         docker("run", "-d", "--name", NAME, "--label", LABEL, "--network", f"{NAME}-net", "--read-only",
+               "--memory", "512m", "--memory-swap", "512m", "--cpus", "1", "--pids-limit", "128",
                "--tmpfs", "/tmp:size=16m", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                "-v", f"{NAME}-data:/data", "-p", f"127.0.0.1:{port}:8080",
                "-e", f"ARTIFACTS_API_TOKEN={token}", "-e", f"ARTIFACTS_PUBLIC_URL=http://127.0.0.1:{port}", tag)
@@ -107,9 +115,13 @@ def main() -> int:
         cleanup()
     leftovers = docker("ps", "-a", "--filter", f"label={LABEL}", "--format", "{{.Names}}")
     checks.append(("no labeled containers left behind", leftovers == "", leftovers))
-    report = {"image": tag, "checks": [{"name": n, "ok": bool(ok), "detail": d} for n, ok, d in checks]}
+    report = {"image": tag, "image_id": image_id, "revision": full, "dirty": dirty,
+              "checks": [{"name": n, "ok": bool(ok), "detail": d} for n, ok, d in checks]}
+    report["passed"] = all(c["ok"] for c in report["checks"])
     print(json.dumps(report, indent=2))
-    return 0 if all(c["ok"] for c in report["checks"]) else 1
+    (SCRATCH / "evidence" / "container-smoke").mkdir(parents=True, exist_ok=True)
+    (SCRATCH / "evidence" / "container-smoke" / "report.json").write_text(json.dumps(report, indent=2))
+    return 0 if report["passed"] else 1
 
 
 if __name__ == "__main__":
