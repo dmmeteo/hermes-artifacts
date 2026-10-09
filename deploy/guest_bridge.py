@@ -83,6 +83,7 @@ class Bridge(BaseHTTPRequestHandler):
     server_version = "artifacts-guest"
     sys_version = ""
     protocol_version = "HTTP/1.1"
+    timeout = 10  # an idle or slow guest connection must not hold a thread forever
     upstream: tuple[str, int]
     trusted: tuple
 

@@ -202,3 +202,11 @@ def test_bridge_refuses_a_non_loopback_upstream():
     with pytest.raises(SystemExit):
         make_server("127.0.0.1:0", "http://172.17.0.1:8080", "")
     assert Path(__file__).exists()
+
+
+def test_idle_guest_connections_are_closed(service):
+    _, bridge = service
+    with socket.create_connection(("127.0.0.1", bridge), timeout=30) as idle:
+        started = time.monotonic()
+        assert idle.recv(1) == b""
+    assert time.monotonic() - started < 25

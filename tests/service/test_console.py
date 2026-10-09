@@ -236,3 +236,13 @@ def test_login_attempts_share_a_global_budget():
     auth = BasicAuth(console, clock=lambda: 1000.0, all_attempts_per_minute=120)
     allowed = [auth.allow_attempt(f"10.0.0.{i}") and auth.allow_globally() for i in range(200)]
     assert all(allowed[:120]) and not any(allowed[120:])
+
+
+def test_console_api_bodies_need_a_declared_length_and_answers_are_not_cached(client):
+    artifact = publish(client)
+    response = client.post(f"/console/api/artifacts/{artifact['id']}/shares", headers=WRITE,
+                           content=iter([b'{"expires_in_seconds": ', b"600}"]))
+    assert response.status_code == 411
+    listing = client.get("/console/api/artifacts", headers=GOOD)
+    assert listing.headers["cache-control"] == "no-store"
+    assert listing.headers["x-content-type-options"] == "nosniff"

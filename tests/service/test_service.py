@@ -379,3 +379,36 @@ def test_backup_command_copies_without_touching_the_source(tmp_path, monkeypatch
         assert db.execute("SELECT id FROM artifacts").fetchall() == [("kept",)]
         assert db.execute("PRAGMA user_version").fetchone()[0] == 1
     assert backup.main(["app.backup", str(tmp_path / "copy.db")]) == 1
+
+
+def test_bodies_without_a_declared_length_are_refused_except_the_streamed_publish(client):
+    def chunks():
+        yield b'{"expires_in_seconds": '
+        yield b"3600}"
+
+    artifact = publish(client, b"# x", "markdown")
+    response = client.post(f"/internal/v1/artifacts/{artifact['id']}/shares", content=chunks(),
+                           headers={**AUTH, "Content-Type": "application/json"})
+    assert response.status_code == 411
+    assert client.get(f"/internal/v1/artifacts/{artifact['id']}", headers=AUTH).json()["shares"] == []
+    streamed = client.post("/internal/v1/artifacts", params={"title": "Streamed", "kind": "markdown"},
+                           content=iter([b"# streamed", b" body"]), headers=AUTH)
+    assert streamed.status_code == 201
+
+
+def test_public_routes_answer_bad_parameters_with_the_link_pages(client):
+    unknown = client.get("/" + "A" * 22)
+    for path in ("/" + "A" * 22 + "/content?theme=evil", "/" + "A" * 22 + "/content?theme=dark"):
+        response = client.get(path, headers=FRAME)
+        assert (response.status_code, response.text) == (404, unknown.text)
+    artifact = publish(client, b"<p>x</p>", "html")
+    token = token_of(share(client, artifact["id"])["url"])
+    assert client.get(f"/{token}/content?theme=evil", headers=FRAME).status_code == 200
+
+
+def test_guest_shell_fills_each_placeholder_once(client):
+    artifact = publish(client, b"<p>x</p>", "html", title="Literal {{token}} and {{expires_at}}")
+    token = token_of(share(client, artifact["id"])["url"])
+    page = client.get(f"/{token}").text
+    assert "Literal {{token}} and {{expires_at}}" in page
+    assert page.count(token) == 2

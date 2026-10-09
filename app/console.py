@@ -44,6 +44,7 @@ PRIVATE_HEADERS = {
     "X-Frame-Options": "DENY",
     "Cross-Origin-Opener-Policy": "same-origin",
 }
+API_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 MAX_BODY = 16 * 1024
 FRAME_PATH = re.compile(PREFIX + r"/api/artifacts/[0-9A-Fa-f-]{36}/frame")
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
@@ -136,7 +137,18 @@ class ConsoleGuard:
         refusal = await self.refusal(scope)
         if refusal is not None:
             return await refusal(scope, receive, send)
-        return await self.app(scope, receive, send)
+        if not scope["path"].startswith(PREFIX + "/api/"):
+            return await self.app(scope, receive, send)
+
+        async def private(message):
+            if message["type"] == "http.response.start":
+                names = {name.lower() for name, _ in message["headers"]}
+                message["headers"] = list(message["headers"]) + [
+                    (name.encode(), value.encode()) for name, value in API_HEADERS.items()
+                    if name.lower().encode() not in names]
+            await send(message)
+
+        return await self.app(scope, receive, private)
 
     async def refusal(self, scope) -> Response | None:
         if self.console is None:
@@ -163,6 +175,8 @@ class ConsoleGuard:
         length = headers.get("content-length", "")
         if length and (not length.isascii() or not length.isdigit() or int(length) > MAX_BODY):
             return _refuse(True, 413, "too_large", "request body is too large")
+        if "transfer-encoding" in headers:
+            return _refuse(True, 411, "length_required", "send the request body with a Content-Length")
         if FRAME_PATH.fullmatch(scope["path"]) and scope["method"] in ("GET", "HEAD"):
             # An iframe navigation cannot carry the API header; it must come from the console's own page.
             if headers.get("sec-fetch-dest") != "iframe" or headers.get("sec-fetch-site") != "same-origin":

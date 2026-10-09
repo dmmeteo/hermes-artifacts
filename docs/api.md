@@ -7,7 +7,7 @@ BASE=http://127.0.0.1:8080
 AUTH="Authorization: Bearer $(cat /path/to/api-token)"
 ```
 
-Errors are JSON: `{"error": {"code": "<code>", "message": "..."}}` with codes such as `unauthorized` (401), `not_found` (404), `too_large` (413) and `invalid_artifact` or `invalid_request` (422).
+Errors are JSON: `{"error": {"code": "<code>", "message": "..."}}` with codes such as `unauthorized` (401), `not_found` (404), `length_required` (411: send a `Content-Length`; only publish accepts a chunked body), `too_large` (413) and `invalid_artifact` or `invalid_request` (422).
 
 ## Publish
 
@@ -18,7 +18,7 @@ Errors are JSON: `{"error": {"code": "<code>", "message": "..."}}` with codes su
 | `title` | yes | Up to 200 characters after control characters are replaced. The slug is derived from it and never changes. |
 | `kind` | yes | `html`, `markdown`, `svg`, `png` or `webp`. HTML must be self-contained. |
 | `source_profile` | no | Attribution label and list filter, default `unknown`. Not an owner or a permission. |
-| `source_session_id` | no | Free-form provenance. |
+| `source_session_id` | no | Provenance label: 1-128 characters from `A-Z a-z 0-9 _ . : -`. |
 
 ```sh
 curl -fsS -X POST "$BASE/internal/v1/artifacts?title=Weekly%20report&kind=html&source_profile=research" \

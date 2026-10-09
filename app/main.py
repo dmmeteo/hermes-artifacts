@@ -56,6 +56,7 @@ PUBLIC_HEADERS = {
     "X-Robots-Tag": "noindex, nofollow",
 }
 _VIEWER = files("app") / "viewer"
+_PLACEHOLDER = re.compile(r"\{\{(title|kind|expires_at|token)\}\}")
 _UNAVAILABLE_PAGE = (
     "<!doctype html><html lang=en><head><meta charset=utf-8>"
     '<meta name=viewport content="width=device-width,initial-scale=1">'
@@ -134,6 +135,10 @@ class InternalGuard:
             if length is not None and length > self.settings.max_bytes:
                 return await _send_json(send, 413, "too_large",
                                         f"content exceeds the {self.settings.max_bytes} byte limit")
+            streamed_publish = scope["method"] == "POST" and scope["path"] == "/internal/v1/artifacts"
+            if "transfer-encoding" in headers and not streamed_publish:
+                # Only publish reads its body in capped chunks; every other route needs a declared length.
+                return await _send_json(send, 411, "length_required", "send the request body with a Content-Length")
         return await self.app(scope, receive, send)
 
 
@@ -409,20 +414,17 @@ def create_app(settings: Settings, clock: Callable[[], int] | None = None) -> Fa
         if failure:
             return failure
         share, artifact = grant
-        page = (_VIEWER / "viewer.html").read_text(encoding="utf-8")
-        page = (
-            page.replace("{{title}}", html.escape(artifact.title))
-            .replace("{{kind}}", html.escape(artifact.kind.value))
-            .replace("{{expires_at}}", str(share.expires_at))
-            .replace("{{token}}", token)
-        )
+        values = {"title": html.escape(artifact.title), "kind": artifact.kind.value,
+                  "expires_at": str(share.expires_at), "token": token}
+        page = _PLACEHOLDER.sub(lambda m: values[m[1]], (_VIEWER / "viewer.html").read_text(encoding="utf-8"))
         return HTMLResponse(page, headers={**PUBLIC_HEADERS, "Content-Security-Policy": SHELL_CSP})
 
     @app.api_route("/{token}/content", methods=["GET", "HEAD"], include_in_schema=False)
-    def share_content(request: Request, token: str, theme: Theme = "light"):
+    def share_content(request: Request, token: str, theme: str = "light"):
         grant, failure = public_grant(request, token)
         if failure:
             return failure
+        theme: Theme = "dark" if theme == "dark" else "light"
         if request.headers.get("sec-fetch-dest") != "iframe":
             # Top-level, the artifact would run with no embedding CSP to contain its navigation.
             return RedirectResponse(f"/{token}", 303, headers=PUBLIC_HEADERS)
