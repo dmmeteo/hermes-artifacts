@@ -83,12 +83,12 @@ def get(url: str, token: str | None = None) -> tuple[int, bytes]:
 
 
 def main() -> int:
+    refuse_live(SCRATCH)
     if "--reevaluate" in sys.argv:
         return reevaluate()
     max_turns = int(sys.argv[sys.argv.index("--max-turns") + 1]) if "--max-turns" in sys.argv else 15
     if max_turns > 15:
         raise SystemExit("the authorized smoke is bounded to 15 agent turns")
-    refuse_live(SCRATCH)
     if EVIDENCE.exists():
         shutil.rmtree(EVIDENCE)
     EVIDENCE.mkdir(parents=True)
@@ -101,7 +101,9 @@ def main() -> int:
     checks = []
     report: dict = {"plugin_tree_sha256": plugin_tree_hash(), "model": model, "max_turns": max_turns,
                     "revision": subprocess.run(["git", "-C", str(PROJECT), "rev-parse", "HEAD"],
-                                               capture_output=True, text=True).stdout.strip()}
+                                               capture_output=True, text=True).stdout.strip(),
+                    "dirty": subprocess.run(["git", "-C", str(PROJECT), "status", "--porcelain"],
+                                            capture_output=True, text=True).stdout.strip() != ""}
     try:
         rt.prepare()
         work = root / "agent-work"

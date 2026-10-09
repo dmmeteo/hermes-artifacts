@@ -51,7 +51,7 @@ def agent_evidence(smoke: dict) -> dict:
         "evidence": str(SMOKE_EVIDENCE / "report.json"), "smoke_revision": smoke.get("revision"),
         "recorded_hash_matches_smoke_revision": plugin_tree_hash_at(revision) == smoke.get("plugin_tree_sha256"),
         "full_plugin_tree_matches": smoke.get("plugin_tree_sha256") == plugin_tree_hash(),
-        "reevaluated": smoke.get("reevaluated"),
+        "reevaluated": smoke.get("reevaluated"), "smoke_tree_dirty": smoke.get("dirty"),
         "agent_contract_drift": git("diff", "--name-only", revision, "--", *AGENT_CONTRACT).splitlines()
         + git("ls-files", "--others", "--exclude-standard", "--", *AGENT_CONTRACT).splitlines(),
         "hint": "rerun scripts/agent_smoke.py only within the authorized bounded smoke",
@@ -129,7 +129,7 @@ def main() -> int:
     smoke = json.loads((SMOKE_EVIDENCE / "report.json").read_text()) if (SMOKE_EVIDENCE / "report.json").exists() else {}
     evidence = agent_evidence(smoke)
     gates.record("real agent smoke evidence passed for the current agent and backend source",
-                 smoke.get("passed") is True and "reevaluated" not in smoke
+                 smoke.get("passed") is True and "reevaluated" not in smoke and smoke.get("dirty") is False
                  and evidence["recorded_hash_matches_smoke_revision"]
                  and not evidence["agent_contract_drift"], evidence)
 

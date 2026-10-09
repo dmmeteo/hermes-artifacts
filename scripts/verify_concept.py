@@ -87,7 +87,7 @@ def policy_checks(folder: Path) -> None:
     check("framework policy tests: config, Basic/bcrypt, Origin/CSRF, proxy headers, guest host", result.returncode == 0,
           result.stdout[-300:])
     contract = subprocess.run([str(SERVICE_PYTHON), "-c", CONTRACT], cwd=PROJECT, capture_output=True, text=True)
-    check("no schema, token-format or artifact-model change from the accepted contract",
+    check("no schema, schema-version, token/slug/profile/session format or kind change from the accepted contract",
           contract.returncode == 0 and contract.stdout.strip() == ACCEPTED_CONTRACT,
           contract.stdout.strip() or contract.stderr[-300:])
     imports = subprocess.run([str(SERVICE_PYTHON), "-c", "import hermes_cli"], capture_output=True, text=True)
