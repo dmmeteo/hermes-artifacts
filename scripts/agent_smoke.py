@@ -36,6 +36,7 @@ OPERATOR_HOME = Path(os.environ.get("HERMES_SMOKE_PROFILE", Path.home() / ".herm
 EVIDENCE = SCRATCH / "evidence" / "agent-smoke"
 EXCHANGE = os.environ.get("ARTIFACTS_SMOKE_EXCHANGE")
 RUNNER_WAIT = 1500
+PANEL = "[data-testid=artifacts-panel]"
 TOKEN_RE = re.compile(r"(?<=/)[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])")
 RESOLVE = (
     "import json, sys\n"
@@ -78,6 +79,20 @@ def reevaluate() -> int:
     for c in report["checks"]:
         print(("PASS " if c["ok"] else "FAIL ") + c["name"])
     return 0 if report["passed"] else 1
+
+
+def dashboard_panel(page):
+    """The panel's frame inside the Hermes dashboard; the host can remount the tab while it settles."""
+    last: Exception | None = None
+    for _ in range(3):
+        try:
+            frame = page.wait_for_selector(PANEL, timeout=30_000).content_frame()
+            frame.wait_for_selector(".ha-root", state="attached", timeout=15_000)
+            return frame
+        except Exception as exc:  # noqa: BLE001 - retried, then raised
+            last = exc
+            page.wait_for_timeout(1000)
+    raise last
 
 
 def redact(value):
@@ -257,11 +272,19 @@ def main() -> int:
                 page.wait_for_timeout(1500)
                 page.screenshot(path=str(EVIDENCE / "guest-agent-share.png"))
                 page.goto(f"{rt.dashboard_url}/artifacts/{html[0]['slug']}")
-                page.wait_for_selector("[data-testid=artifact-frame]", timeout=30_000)
+                panel = dashboard_panel(page)
+                panel.wait_for_selector("[data-testid=artifact-frame]", timeout=30_000)
                 page.wait_for_timeout(1200)
                 page.screenshot(path=str(EVIDENCE / "dashboard-agent-artifact.png"))
                 page.goto(f"{rt.dashboard_url}/artifacts")
-                page.wait_for_selector(".ha-row", timeout=30_000)
+                panel = dashboard_panel(page)
+                panel.wait_for_selector(".ha-row", timeout=30_000)
+                for _ in range(20):
+                    rows = len(panel.query_selector_all(".ha-row"))
+                    if rows == len(listing):
+                        break
+                    page.wait_for_timeout(500)
+                checks.append(("dashboard library lists both agent artifacts", rows == len(listing), rows))
                 page.screenshot(path=str(EVIDENCE / "dashboard-agent-library.png"))
                 browser.close()
         else:
