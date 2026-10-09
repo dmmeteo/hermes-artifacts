@@ -107,7 +107,7 @@ def run_agent(work: Path, hermes_home: Path, max_turns: int) -> dict:
     )
     if resolved.returncode != 0:
         return {"model": model,
-                "blocker": "read-only credential resolution failed: " + resolved.stderr.strip().splitlines()[-1][:300]}
+                "blocker": "read-only credential resolution failed: " + (resolved.stderr.strip().splitlines() or [""])[-1][:300]}
     credentials = json.loads(resolved.stdout)
     credentials["model"] = model
     runner = subprocess.run(
@@ -117,7 +117,7 @@ def run_agent(work: Path, hermes_home: Path, max_turns: int) -> dict:
     )
     secret = credentials.pop("api_key")
     del credentials
-    record = {"model": model, "returncode": runner.returncode, "credential_absent": secret not in runner.stdout,
+    record = {"model": model, "returncode": runner.returncode, "credential_absent": secret not in runner.stdout + runner.stderr,
               "stdout": runner.stdout.replace(secret, "<redacted>"),
               "stderr": runner.stderr.replace(secret, "<redacted>")}
     del secret
@@ -138,11 +138,14 @@ def serve_runner(exchange: Path) -> int:
     install_plugin(hermes_home, request["service_url"], request["token"])
     try:
         record = run_agent(work, hermes_home, min(int(request["max_turns"]), 15))
+    except Exception as exc:  # noqa: BLE001 - reported to the browser host as a blocker
+        record = {"blocker": f"runner host failed: {type(exc).__name__}: {str(exc)[-300:]}"}
     finally:
         record_files = {p.name: base64.b64encode(p.read_bytes()).decode() for p in work.iterdir() if p.is_file()}
         shutil.rmtree(root)
     record.update(files=record_files, runner=git_identity(), runner_plugin_tree_sha256=plugin_tree_hash(),
-                  runner_checkout_unchanged=host_status() == host_before)
+                  runner_checkout_unchanged=host_status() == host_before,
+                  request_token_sha256=hashlib.sha256(request["token"].encode()).hexdigest())
     target = exchange / "outcome.json"
     target.with_suffix(".tmp").write_text(json.dumps(record))
     target.with_suffix(".tmp").rename(target)
@@ -152,9 +155,10 @@ def serve_runner(exchange: Path) -> int:
 
 def run_agent_remotely(exchange: Path, rt: Runtime, work: Path, max_turns: int) -> dict:
     request = exchange / "request.json"
+    outcome = exchange / "outcome.json"
+    outcome.unlink(missing_ok=True)
     request.write_text(json.dumps({"service_url": rt.service_url, "token": rt.token, "max_turns": max_turns}))
     os.chmod(request, 0o600)
-    outcome = exchange / "outcome.json"
     deadline = time.monotonic() + RUNNER_WAIT
     while not outcome.exists():
         if time.monotonic() > deadline:
@@ -201,9 +205,11 @@ def main() -> int:
             report["blocker"] = record["blocker"]
             raise RuntimeError(report["blocker"])
         if EXCHANGE:
+            checks.append(("runner host answered this run's request",
+                           record.get("request_token_sha256") == hashlib.sha256(rt.token.encode()).hexdigest(), None))
             checks.append(("runner host ran the same clean revision and plugin",
-                           record["runner"] == identity and record["runner_plugin_tree_sha256"] == plugin_tree_hash(),
-                           record["runner"]))
+                           record["runner"] == identity and not identity["dirty"]
+                           and record["runner_plugin_tree_sha256"] == plugin_tree_hash(), record["runner"]))
             checks.append(("runner host Hermes checkout unchanged", record["runner_checkout_unchanged"], None))
         (root / "logs" / "agent-runner.err").write_text(record["stderr"])
         if record["returncode"] != 0 or not record["stdout"].strip():

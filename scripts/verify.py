@@ -131,14 +131,21 @@ def main() -> int:
     gates.command("concept gate: standalone and embedded hosts, auth negative controls, packaged skill",
                   [sys.executable, str(PROJECT / "scripts" / "verify_concept.py")], expect_in_output=" 0 failed at ")
     if "--container-smoke-report" in sys.argv:
-        path = Path(sys.argv[sys.argv.index("--container-smoke-report") + 1])
-        recorded = json.loads(path.read_text()) if path.is_file() else {}
+        args = sys.argv[sys.argv.index("--container-smoke-report") + 1:]
+        path = Path(args[0]) if args else Path("<missing>")
+        try:
+            recorded = json.loads(path.read_text()) if path.is_file() else {}
+            recorded = recorded if isinstance(recorded, dict) else {}
+            checks_ok = bool(recorded.get("checks")) and all(isinstance(c, dict) and c.get("ok") is True
+                                                             for c in recorded["checks"])
+        except (ValueError, TypeError, OSError) as exc:
+            recorded, checks_ok = {"error": str(exc)[:300]}, False
         gates.record("container build and smoke (recorded on a Docker host for this revision)",
                      recorded.get("passed") is True and recorded.get("revision") == revision
-                     and recorded.get("dirty") is False and not dirty
-                     and bool(recorded.get("checks")) and all(c.get("ok") for c in recorded["checks"]),
+                     and recorded.get("dirty") is False and not dirty and checks_ok,
                      {"evidence": str(path), "revision": recorded.get("revision"), "image_id": recorded.get("image_id"),
-                      "dirty": recorded.get("dirty"), "checks": len(recorded.get("checks") or [])})
+                      "dirty": recorded.get("dirty"), "error": recorded.get("error"),
+                      "checks": len(recorded.get("checks") or []) if isinstance(recorded.get("checks"), list) else None})
     else:
         gates.command("container build and smoke", [sys.executable, str(PROJECT / "scripts" / "container_smoke.py")])
 
