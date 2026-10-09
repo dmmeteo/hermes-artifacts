@@ -11,7 +11,7 @@
 
 | Threat | Control | Evidence |
 |---|---|---|
-| Anonymous management | Bearer credential with `hmac.compare_digest`, enforced by an ASGI guard before body parsing and again by the router; Traefik does not route `/internal/` | `test_management_*`, UAT "service ... without credential is 401" |
+| Anonymous management | Bearer credential with `hmac.compare_digest`, enforced by an ASGI guard before body parsing and again by the router; the guest-only bridge never forwards `/internal/` | `test_management_*`, UAT "service ... without credential is 401" |
 | Anonymous dashboard API | Hermes session auth in front of `/api/plugins/artifacts/*`; user-plugin backends mount only when enabled | UAT "anonymous ... rejected by Hermes auth"; Hermes contract tests in verify |
 | Credential exposure | Credential never in browser JS, URLs or responses; plugin maps service 401 to a generic 502; client follows no redirects | `test_dashboard_maps_service_auth_failure_away_from_401`; UAT secret scan |
 | Capability token leakage | 128-bit tokens (22 base64url characters from `secrets.token_urlsafe(16)`), SHA-256 at rest, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `noindex`, access log writes `/<share>`, Traefik route logs off | `test_access_log_never_contains_capability_paths`; UAT log/evidence scan; container log check |
@@ -29,7 +29,7 @@
 
 ## Read-only security review (2026-10-06)
 
-A native read-only reviewer subagent read the implementation at `8aab879`. It found no high-severity issues. Disposition:
+A native read-only reviewer subagent read the implementation at pre-release development revision `8aab879` (not part of this repository's public history). It found no high-severity issues. Disposition:
 
 | # | Finding | Severity | Disposition |
 |---|---|---|---|
@@ -45,7 +45,7 @@ A native read-only reviewer subagent read the implementation at `8aab879`. It fo
 
 ## Read-only security review (2026-10-07, iteration 3)
 
-A native read-only reviewer subagent read the diff from `623cf4e` (console, auth, panel, Hermes host). No high or medium findings. Disposition:
+A native read-only reviewer subagent read the diff from pre-release development revision `623cf4e` (not in the public history) (console, auth, panel, Hermes host). No high or medium findings. Disposition:
 
 | # | Finding | Severity | Disposition |
 |---|---|---|---|

@@ -30,7 +30,7 @@ To try it on your own machine without setting any of this, use the launcher in [
 Create the login with either tool. Both print a `user:hash` line:
 
 ```sh
-uv run python -m app.hash_password operator > /etc/hermes-artifacts/htpasswd   # prompts without echo, 12-72 bytes
+uv run --frozen python -m app.hash_password operator > /etc/hermes-artifacts/htpasswd   # prompts without echo, 12-72 bytes
 htpasswd -nBC 12 operator                                                       # Apache tools, compatible
 ```
 

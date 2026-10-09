@@ -39,7 +39,7 @@ ARTIFACTS_PUBLIC_URL=https://share.example.com \
 docker compose -f deploy/compose.yml up -d --build
 ```
 
-The example joins an external Docker network named `proxy` for the reverse proxy; adjust it to yours. No image is published; build from source.
+The example publishes the service on host loopback port `ARTIFACTS_HOST_PORT` (default 8787) and joins an external Docker network named `proxy`; adjust both to yours. With the guest-only bridge below, set the bridge's `BRIDGE_UPSTREAM` to `http://127.0.0.1:<ARTIFACTS_HOST_PORT>`. `ARTIFACTS_TRUSTED_PROXIES` must name only the address the service actually sees as its peer for proxied requests: the proxy container's address when the proxy connects over the `proxy` network, or the Docker gateway when requests arrive through the loopback-published port. Any process that can connect from a trusted address can choose the client address used for rate limiting. No image is published; build from source.
 
 ## Guest-only bridge
 

@@ -68,4 +68,4 @@ Known gaps:
 
 ## License
 
-[MIT](LICENSE). Report security issues privately as described in [SECURITY.md](SECURITY.md).
+[MIT](LICENSE); bundled third-party code is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Report security issues privately as described in [SECURITY.md](SECURITY.md).

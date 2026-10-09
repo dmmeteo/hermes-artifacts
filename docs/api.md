@@ -15,7 +15,7 @@ Errors are JSON: `{"error": {"code": "<code>", "message": "..."}}` with codes su
 
 | Parameter | Required | Notes |
 |---|---|---|
-| `title` | yes | Up to 400 characters. The slug is derived from it and never changes. |
+| `title` | yes | Up to 200 characters after control characters are replaced. The slug is derived from it and never changes. |
 | `kind` | yes | `html`, `markdown`, `svg`, `png` or `webp`. HTML must be self-contained. |
 | `source_profile` | no | Attribution label and list filter, default `unknown`. Not an owner or a permission. |
 | `source_session_id` | no | Free-form provenance. |
