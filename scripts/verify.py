@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import time
@@ -46,7 +47,8 @@ def plugin_tree_hash_at(revision: str) -> str:
 
 
 def agent_evidence(smoke: dict) -> dict:
-    revision = smoke.get("revision") or "HEAD"
+    revision = smoke.get("revision") or ""
+    revision = revision if re.fullmatch(r"[0-9a-f]{40}", revision) else "HEAD"
     return {
         "evidence": str(SMOKE_EVIDENCE / "report.json"), "smoke_revision": smoke.get("revision"),
         "recorded_hash_matches_smoke_revision": plugin_tree_hash_at(revision) == smoke.get("plugin_tree_sha256"),
