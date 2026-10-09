@@ -1,6 +1,6 @@
 # Hermes Artifacts
 
-> **Preview.** This is an early public preview (0.1.0). The service, the standalone console and the Hermes plugin work and have automated tests, but the project has not been production-tested beyond one private pilot, and not every release gate has passed (see [Status](#status)). Interfaces and the database schema may change.
+> **Preview.** This is an early public preview (0.1.0). The service, the standalone console and the Hermes plugin work and have automated tests, and the release revision passed the full release gate, but the project has not been production-tested beyond one private pilot (see [Status](#status)). Interfaces and the database schema may change.
 
 One shared, private library for the finished documents your agents produce, with explicit, expiring guest links.
 
@@ -38,6 +38,7 @@ Open the console URL it prints, `http://127.0.0.1:8080/console/`, and sign in as
 - [Security model](docs/SECURITY.md): threats, controls, review findings and residual limitations.
 - [Architecture](ARCHITECTURE.md) and [diagram](architecture-diagram.md). Visual decisions: [DESIGN.md](DESIGN.md).
 - [Contributing](CONTRIBUTING.md): development setup and checks.
+- [Changelog](CHANGELOG.md).
 
 ## Guest links
 
@@ -55,7 +56,8 @@ Open the console URL it prints, `http://127.0.0.1:8080/console/`, and sign in as
 What has been exercised for this preview:
 
 - Service unit and HTTP tests (`uv run --frozen pytest tests/service`) and plugin tests on Hermes's Python 3.11.
-- Browser UAT and the concept gate (`scripts/uat.py`, `scripts/verify_concept.py`) against an isolated Hermes dashboard and a container build, on the development revision this preview was cut from.
+- The full release gate `scripts/verify.py` on the release revision (2026-10-09): service and plugin tests, the Hermes dashboard contract tests, a rebuild that matches the committed bundles, browser UAT and the concept gate against an isolated Hermes 0.21.5 dashboard in headless Chromium, the container build and restart smoke, and a real agent smoke through the plugin with a Codex subscription. Browser and container ran on one host and the agent with its credential on another, as described in [CONTRIBUTING.md](CONTRIBUTING.md#integration-gates).
+- `pip-audit` over the Python lock and `npm audit` over the panel's lock report no known vulnerabilities.
 - A private pilot of the service behind a reverse proxy with the guest-only bridge.
 - A launch audit on 2026-10-09: two independent read-only reviews and the fixes listed in [docs/SECURITY.md](docs/SECURITY.md#launch-audit-2026-10-09).
 
@@ -66,6 +68,7 @@ Known gaps:
 - One operator login for the console; no per-user accounts. Basic authentication has no server-side logout.
 - An older database schema is refused, not migrated.
 - Tested against Hermes 0.21.x only.
+- Browser behaviour, including the artifact sandbox and CSP, is tested in Chromium only. Firefox and Safari are expected to fail closed but are untested.
 
 ## License
 
