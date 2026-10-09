@@ -57,10 +57,11 @@ What has been exercised for this preview:
 - Service unit and HTTP tests (`uv run --frozen pytest tests/service`) and plugin tests on Hermes's Python 3.11.
 - Browser UAT and the concept gate (`scripts/uat.py`, `scripts/verify_concept.py`) against an isolated Hermes dashboard and a container build, on the development revision this preview was cut from.
 - A private pilot of the service behind a reverse proxy with the guest-only bridge.
+- A launch audit on 2026-10-09: two independent read-only reviews and the fixes listed in [docs/SECURITY.md](docs/SECURITY.md#launch-audit-2026-10-09).
 
 Known gaps:
 
-- The full gate `scripts/verify.py` did not pass end to end: its recorded real-agent smoke is tied to development history that is not part of this repository, so that gate fails until a new smoke is run. See [CONTRIBUTING.md](CONTRIBUTING.md#integration-gates).
+- The full gate `scripts/verify.py` needs a real-agent smoke recorded on your machine for the current agent and backend source (`scripts/agent_smoke.py`, which uses a Codex subscription). A fresh clone has none, so that gate fails until you run it. See [CONTRIBUTING.md](CONTRIBUTING.md#integration-gates).
 - No published container image, package or release. Run from source.
 - One operator login for the console; no per-user accounts. Basic authentication has no server-side logout.
 - An older database schema is refused, not migrated.

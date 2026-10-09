@@ -74,6 +74,7 @@ Two independent read-only reviews (security; release and verification integrity)
 | 9 | Uvicorn has no request-header timeout; 64 slow connections exhaust the service | Low | **Accepted with deployment rule**: never expose the service port directly; put the guest bridge or a timing-out proxy in front |
 | 10 | `ARTIFACTS_PUBLIC_URL` is not validated; Markdown re-renders on every view; the access log keeps private slugs of `/console/<slug>`; a trailing slash on a guest path gets the framework's 307 | Info | **Accepted**: operator configuration, rate-limited, operator-only log, no token information disclosed |
 | 11 | The CSP and sandbox behaviour is proven by UAT on Chromium only | Gap | **Open**: Firefox and Safari are expected to fail closed but are not tested |
+| 12 | `pip-audit` reports five Starlette 0.49.3 advisories (CVE-2026-48710, CVE-2026-54283, CVE-2026-54282, CVE-2026-48818, CVE-2026-48817), fixed only in Starlette 1.x, which needs a much newer FastAPI | Info | **Not reachable here**: the guards read the raw path and `Host` header, never `request.url`; the service uses no `request.form()`, `StaticFiles` or `HTTPEndpoint`, and runs on POSIX. Upgrade with the next FastAPI bump. `npm audit` reports no advisories |
 
 ## Residual limitations
 
