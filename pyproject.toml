@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Private artifact library for Hermes with explicit, expiring guest shares"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "fastapi==0.120.*",
+    "fastapi==0.141.*",
     "uvicorn==0.38.*",
     "markdown-it-py==4.*",
     "bcrypt==5.*",
@@ -20,6 +20,8 @@ dev = [
 
 [tool.uv]
 package = false
+# Starlette below 1.3.1 carries CVE-2026-48710, -48817, -48818, -54282 and -54283.
+constraint-dependencies = ["starlette>=1.3.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/service"]
