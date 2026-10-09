@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import sqlite3
 import uuid
 from collections.abc import Callable, Iterator
@@ -72,7 +73,7 @@ class Store:
     def __init__(self, path: Path, clock: Callable[[], int]):
         self.path = path
         self.clock = clock
-        path.parent.mkdir(parents=True, exist_ok=True)
+        _create_private(path)
         with self._connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             populated = db.execute("SELECT count(*) FROM sqlite_master WHERE name = 'artifacts'").fetchone()[0]
@@ -247,9 +248,21 @@ class Store:
         return share, _artifact(row[5:])
 
     def backup(self, destination: Path) -> None:
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        """Raises FileExistsError rather than overwrite; the copy is owner-only like the library."""
+        _create_private(destination, exclusive=True)
         with self._connect() as source, closing(sqlite3.connect(destination)) as target:
             source.backup(target)
+
+
+def _create_private(path: Path, exclusive: bool = False) -> None:
+    """The library holds every artifact, so a new database file (and SQLite's -wal/-shm, which copy its
+    mode) is created 0600 in a 0700 folder whatever the process umask. Existing files are left as they are."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+    except FileExistsError:
+        if exclusive:
+            raise
 
 
 def _artifact(row: tuple) -> Artifact:

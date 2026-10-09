@@ -18,10 +18,11 @@ def main(argv: list[str]) -> int:
         print(f"database not found: {source}", file=sys.stderr)
         return 1
     destination = Path(argv[1])
-    if destination.exists():
+    try:
+        Store(source, lambda: int(time.time())).backup(destination)
+    except FileExistsError:
         print(f"refusing to overwrite {destination}", file=sys.stderr)
         return 1
-    Store(source, lambda: int(time.time())).backup(destination)
     print(f"backup written to {destination}")
     return 0
 

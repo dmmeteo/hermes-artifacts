@@ -61,7 +61,7 @@ Other proxies (nginx, Caddy) work the same way: route only the guest paths, drop
 
 ## Backup and restore
 
-`app.backup` uses SQLite's online backup API, so it is safe while the service runs. It refuses to overwrite an existing file.
+`app.backup` uses SQLite's online backup API, so it is safe while the service runs. It refuses to overwrite an existing file and creates the copy owner-only (0600), like a new library database. A backup holds every artifact and share record, so store it as privately as the database.
 
 ```sh
 ARTIFACTS_DB=/var/lib/hermes-artifacts/artifacts.db \

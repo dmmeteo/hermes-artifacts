@@ -1,4 +1,5 @@
 import base64
+import os
 import logging
 import re
 import sqlite3
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.domain import Kind
 from app.store import Store
 
 TOKEN = "t" * 40
@@ -343,3 +345,19 @@ def test_pre_slug_database_is_refused_not_migrated(tmp_path, clock):
         db.execute("CREATE TABLE artifacts (id TEXT PRIMARY KEY)")
     with pytest.raises(RuntimeError, match="no migration"):
         Store(path, clock)
+
+
+def test_library_and_backup_files_are_owner_only_whatever_the_umask(tmp_path, clock):
+    previous = os.umask(0o002)
+    try:
+        store = Store(tmp_path / "lib" / "a.db", clock)
+        store.publish(title="Private", kind=Kind.MARKDOWN, content=b"# private", source_profile="p",
+                      source_session_id=None)
+        backup = tmp_path / "backups" / "b.db"
+        store.backup(backup)
+    finally:
+        os.umask(previous)
+    for path in (tmp_path / "lib", tmp_path / "lib" / "a.db", backup):
+        assert path.stat().st_mode & 0o077 == 0, f"{path.name} is {oct(path.stat().st_mode & 0o777)}"
+    with pytest.raises(FileExistsError):
+        store.backup(backup)
