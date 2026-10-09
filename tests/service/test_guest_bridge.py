@@ -210,3 +210,24 @@ def test_idle_guest_connections_are_closed(service):
         started = time.monotonic()
         assert idle.recv(1) == b""
     assert time.monotonic() - started < 25
+
+
+def test_a_steady_slow_reader_gets_the_whole_large_download(service):
+    port, _ = service
+    body = b"<!doctype html><p>" + b"x" * (9 * 1024 * 1024)
+    _, artifact = manage(port, "POST", "/artifacts?title=Large&kind=html&source_profile=prime", body, "text/html")
+    _, share = manage(port, "POST", f"/artifacts/{artifact['id']}/shares", b'{"expires_in_seconds": 600}')
+    bridge, bridge_port = serve_bridge(port)
+    bridge.RequestHandlerClass.timeout = 0.5
+    try:
+        with socket.socket() as guest:
+            guest.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 1024)
+            guest.connect(("127.0.0.1", bridge_port))
+            guest.sendall(f"GET /{share['url'].rsplit('/', 1)[1]}/download HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+            received = b""
+            while chunk := guest.recv(512 * 1024):
+                received += chunk
+                time.sleep(0.15)
+        assert received.endswith(body)
+    finally:
+        bridge.shutdown()

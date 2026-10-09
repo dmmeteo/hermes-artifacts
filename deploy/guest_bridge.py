@@ -124,7 +124,11 @@ class Bridge(BaseHTTPRequestHandler):
             self.send_header("Connection", "close")
         self.end_headers()
         if self.command != "HEAD":
-            self.wfile.write(body)
+            # The socket timeout bounds each blocking call, so write in slices: a slow but steady guest
+            # gets the whole artifact, a stalled one is cut off after the timeout.
+            view = memoryview(body)
+            for start in range(0, len(view), 64 * 1024):
+                self.wfile.write(view[start:start + 64 * 1024])
 
     def _plain(self, status: int, text: str, extra: dict) -> None:
         body = text.encode()
