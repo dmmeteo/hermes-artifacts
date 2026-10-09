@@ -24,7 +24,8 @@ from pathlib import Path
 from playwright.sync_api import Page, sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from runtime import HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, SERVICE_PYTHON, Runtime, free_port, host_status  # noqa: E402
+from runtime import (HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, SERVICE_PYTHON, Runtime,  # noqa: E402
+                     free_port, host_status, refuse_live)
 
 EVIDENCE = SCRATCH / "evidence" / "uat"
 SCREENS = EVIDENCE / "screens"
@@ -414,6 +415,7 @@ def workspace_fill(page: Page, label: str) -> dict:
 
 
 def main() -> int:
+    refuse_live(SCRATCH)
     keep = "--keep" in sys.argv
     if EVIDENCE.exists():
         shutil.rmtree(EVIDENCE)

@@ -20,7 +20,7 @@ import yaml
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from runtime import HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, Runtime, host_status  # noqa: E402
+from runtime import HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, Runtime, host_status, refuse_live  # noqa: E402
 
 # The Hermes profile whose model and subscription credential the smoke borrows (read-only).
 OPERATOR_HOME = Path(os.environ.get("HERMES_SMOKE_PROFILE", Path.home() / ".hermes")).expanduser()
@@ -88,6 +88,7 @@ def main() -> int:
     max_turns = int(sys.argv[sys.argv.index("--max-turns") + 1]) if "--max-turns" in sys.argv else 15
     if max_turns > 15:
         raise SystemExit("the authorized smoke is bounded to 15 agent turns")
+    refuse_live(SCRATCH)
     if EVIDENCE.exists():
         shutil.rmtree(EVIDENCE)
     EVIDENCE.mkdir(parents=True)

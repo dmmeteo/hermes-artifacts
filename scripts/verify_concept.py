@@ -34,7 +34,15 @@ from runtime import (HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, SERVICE_P
                      free_port, host_status, install_plugin, refuse_live, wait_http)
 from uat import T, art, panel, rect, tolerant, viewport  # noqa: E402
 
-BASE_REVISION = "623cf4e8df726f38c165a867a56596f23481dc02"
+# SHA-256 of the accepted data contract: schema, schema version, token/slug/profile/session formats and kinds.
+# A deliberate contract change updates this value in the same commit.
+ACCEPTED_CONTRACT = "9e0937d656aec806b24975272e81a03bfbd2ef5b3b8917d19b21711fba847bd6"
+CONTRACT = (
+    "import hashlib\nfrom app import domain, store\n"
+    "parts = [store.SCHEMA, str(store.SCHEMA_VERSION), domain.SHARE_TOKEN_RE.pattern, domain.SLUG_RE.pattern,"
+    " domain.PROFILE_RE.pattern, domain.SESSION_RE.pattern, ','.join(k.value for k in domain.Kind)]\n"
+    "print(hashlib.sha256(chr(0).join(parts).encode()).hexdigest())\n"
+)
 FIXTURES = PROJECT / "tests" / "fixtures"
 TOKEN_URL = re.compile(r"^(https?://[^/]+)/([A-Za-z0-9_-]{22})$")
 CHANNEL = "hermes-artifacts"
@@ -49,7 +57,8 @@ def check(name: str, ok: bool, detail: object = None) -> bool:
 
 
 def git(*args: str) -> str:
-    return subprocess.run(["git", "-C", str(PROJECT), *args], capture_output=True, text=True).stdout.strip()
+    return subprocess.run(["git", "-C", str(PROJECT), *args], capture_output=True, text=True,
+                          check=True).stdout.strip()
 
 
 def http(method: str, url: str, headers: dict | None = None, body: bytes | None = None) -> tuple[int, dict, bytes]:
@@ -77,8 +86,10 @@ def policy_checks(folder: Path) -> None:
     (folder / "policy-tests.log").write_text(result.stdout + result.stderr)
     check("framework policy tests: config, Basic/bcrypt, Origin/CSRF, proxy headers, guest host", result.returncode == 0,
           result.stdout[-300:])
-    drift = git("diff", "--stat", BASE_REVISION, "--", "app/store.py", "app/domain.py")
-    check("no schema, token-format or artifact-model change since the accepted base", drift == "", drift)
+    contract = subprocess.run([str(SERVICE_PYTHON), "-c", CONTRACT], cwd=PROJECT, capture_output=True, text=True)
+    check("no schema, token-format or artifact-model change from the accepted contract",
+          contract.returncode == 0 and contract.stdout.strip() == ACCEPTED_CONTRACT,
+          contract.stdout.strip() or contract.stderr[-300:])
     imports = subprocess.run([str(SERVICE_PYTHON), "-c", "import hermes_cli"], capture_output=True, text=True)
     check("the service interpreter cannot import Hermes at all", imports.returncode != 0, imports.returncode)
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from agent_smoke import EVIDENCE as SMOKE_EVIDENCE, plugin_tree_hash  # noqa: E402
-from runtime import HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, host_head, host_status  # noqa: E402
+from runtime import HERMES_CHECKOUT, HERMES_PYTHON, PROJECT, SCRATCH, host_head, host_status, refuse_live  # noqa: E402
 
 # Everything the recorded agent run exercised. The browser bundle is excluded: the UAT re-runs every
 # dashboard check on the current bundle, so the recorded run only vouches for agent and backend behavior.
@@ -51,6 +51,7 @@ def agent_evidence(smoke: dict) -> dict:
         "evidence": str(SMOKE_EVIDENCE / "report.json"), "smoke_revision": smoke.get("revision"),
         "recorded_hash_matches_smoke_revision": plugin_tree_hash_at(revision) == smoke.get("plugin_tree_sha256"),
         "full_plugin_tree_matches": smoke.get("plugin_tree_sha256") == plugin_tree_hash(),
+        "reevaluated": smoke.get("reevaluated"),
         "agent_contract_drift": git("diff", "--name-only", revision, "--", *AGENT_CONTRACT).splitlines()
         + git("ls-files", "--others", "--exclude-standard", "--", *AGENT_CONTRACT).splitlines(),
         "hint": "rerun scripts/agent_smoke.py only within the authorized bounded smoke",
@@ -82,6 +83,7 @@ class Gates:
 
 
 def main() -> int:
+    refuse_live(SCRATCH)
     revision = git("rev-parse", "HEAD")
     dirty = git("status", "--porcelain")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -120,16 +122,22 @@ def main() -> int:
                   expect_in_output="passed")
     gates.command("runtime UAT: real dashboard, guest service, browser, lifecycle",
                   [sys.executable, str(PROJECT / "scripts" / "uat.py")], expect_in_output="0 failed")
+    gates.command("concept gate: standalone and embedded hosts, auth negative controls, packaged skill",
+                  [sys.executable, str(PROJECT / "scripts" / "verify_concept.py")], expect_in_output=" 0 failed at ")
     gates.command("container build and smoke", [sys.executable, str(PROJECT / "scripts" / "container_smoke.py")])
 
     smoke = json.loads((SMOKE_EVIDENCE / "report.json").read_text()) if (SMOKE_EVIDENCE / "report.json").exists() else {}
     evidence = agent_evidence(smoke)
     gates.record("real agent smoke evidence passed for the current agent and backend source",
-                 smoke.get("passed") is True and evidence["recorded_hash_matches_smoke_revision"]
+                 smoke.get("passed") is True and "reevaluated" not in smoke
+                 and evidence["recorded_hash_matches_smoke_revision"]
                  and not evidence["agent_contract_drift"], evidence)
 
-    tracked = git("grep", "-nIE", r"(eyJhbGc[i]Oi|ARTIFACTS_API_TOKEN=[A-Za-z0-9_-]{16,}|HERMES_ARTIFACTS_TOKEN=[A-Za-z0-9_-]{16,})")
-    gates.record("no credentials tracked in git", tracked == "", tracked[:300])
+    tracked = git("grep", "-nIE", r"(eyJhbGc[i]Oi|ARTIFACTS_API_TOKEN=[A-Za-z0-9_-]{16,}|HERMES_ARTIFACTS_TOKEN=[A-Za-z0-9_-]{16,}"
+                  r"|\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53})")
+    tracked += "\n".join(f for f in git("ls-files").splitlines()
+                         if Path(f).name in ("api-token", "htpasswd", ".env") or f.startswith(".local"))
+    gates.record("no credentials tracked in git", tracked.strip() == "", tracked[:300])
 
     gates.record("Hermes checkout unchanged by the gates",
                  host_status() == host_before and host_head() == head_before,
