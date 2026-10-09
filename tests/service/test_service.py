@@ -361,3 +361,21 @@ def test_library_and_backup_files_are_owner_only_whatever_the_umask(tmp_path, cl
         assert path.stat().st_mode & 0o077 == 0, f"{path.name} is {oct(path.stat().st_mode & 0o777)}"
     with pytest.raises(FileExistsError):
         store.backup(backup)
+
+
+def test_backup_command_copies_without_touching_the_source(tmp_path, monkeypatch, capsys):
+    from app import backup
+
+    source = tmp_path / "old.db"
+    with sqlite3.connect(source) as db:
+        db.execute("CREATE TABLE artifacts (id TEXT)")
+        db.execute("INSERT INTO artifacts VALUES ('kept')")
+        db.execute("PRAGMA user_version = 1")
+    before = source.read_bytes()
+    monkeypatch.setenv("ARTIFACTS_DB", str(source))
+    assert backup.main(["app.backup", str(tmp_path / "copy.db")]) == 0
+    assert source.read_bytes() == before
+    with sqlite3.connect(tmp_path / "copy.db") as db:
+        assert db.execute("SELECT id FROM artifacts").fetchall() == [("kept",)]
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert backup.main(["app.backup", str(tmp_path / "copy.db")]) == 1

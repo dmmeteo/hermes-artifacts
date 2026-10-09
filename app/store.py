@@ -248,10 +248,16 @@ class Store:
         return share, _artifact(row[5:])
 
     def backup(self, destination: Path) -> None:
-        """Raises FileExistsError rather than overwrite; the copy is owner-only like the library."""
-        _create_private(destination, exclusive=True)
-        with self._connect() as source, closing(sqlite3.connect(destination)) as target:
-            source.backup(target)
+        backup_database(self.path, destination)
+
+
+def backup_database(source: Path, destination: Path) -> None:
+    """Online copy that opens the source read-only, so it neither upgrades nor refuses any schema.
+    Raises FileExistsError rather than overwrite; the copy is owner-only like the library."""
+    _create_private(destination, exclusive=True)
+    with (closing(sqlite3.connect(f"{source.resolve().as_uri()}?mode=ro", uri=True, timeout=5)) as db,
+          closing(sqlite3.connect(destination)) as target):
+        db.backup(target)
 
 
 def _create_private(path: Path, exclusive: bool = False) -> None:
