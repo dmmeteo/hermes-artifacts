@@ -42,4 +42,4 @@ One shared, private library holds every artifact. No agent or profile owns it. `
 
 ## Secrets
 
-The client resolves the service URL and token through Hermes's active secret scope. Never print the token, put it in a URL, write it to a file or pass it to a tool. Treat guest URLs as secrets too: share them only with the user who asked, and do not paste them into artifacts, logs or other channels.
+The service token comes from Hermes's active secret scope. Never print it, put it in a URL, write it to a file or pass it to a tool. Treat guest URLs as secrets too: share them only with the user who asked, and do not paste them into artifacts, logs or other channels.

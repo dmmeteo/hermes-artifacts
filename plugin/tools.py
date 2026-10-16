@@ -74,6 +74,7 @@ def _read_source(args: dict) -> tuple[bytes, str]:
     if path:
         from agent.file_safety import raise_if_read_blocked
 
+        raise_if_read_blocked(str(path))
         file = Path(str(path)).expanduser().resolve()
         raise_if_read_blocked(str(file))
         inferred = EXTENSION_KINDS.get(file.suffix.lower())
@@ -135,7 +136,13 @@ def download(service: ArtifactService, args: dict, context: dict) -> dict:
 
     if not str(args.get("path") or "").strip():
         raise ValueError("path is required")
-    target = Path(str(args["path"])).expanduser().resolve()
+    raw = str(args["path"])
+    denied = get_write_denied_error(raw)
+    if denied:
+        raise ValueError(denied)
+    if is_write_approval_required(raw):
+        raise ValueError("destination requires write approval; artifact_download cannot grant approval")
+    target = Path(raw).expanduser().resolve()
     denied = get_write_denied_error(str(target))
     if denied:
         raise ValueError(denied)

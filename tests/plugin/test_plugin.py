@@ -60,8 +60,8 @@ def load_by_path(name: str, path: Path):
 
 
 @pytest.fixture(scope="module")
-def plugin():
-    spec = importlib.util.spec_from_file_location("hermes_plugins_test_artifacts", PROJECT / "plugin" / "__init__.py",
+def plugin(request):
+    spec = importlib.util.spec_from_file_location(f"hermes_plugins_{request.module.__name__}_artifacts", PROJECT / "plugin" / "__init__.py",
                                                   submodule_search_locations=[str(PROJECT / "plugin")])
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
