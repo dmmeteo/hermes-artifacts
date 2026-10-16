@@ -492,7 +492,8 @@ def run(rt: Runtime, share_tokens: list[str]) -> None:
     check("explicit share defaults to 7 days", dispatch["second_share_expires_in"] == 604_800,
           dispatch["second_share_expires_in"])
     check("revocation through tool works", dispatch["revoked_status"] == "revoked", dispatch["revoked_status"])
-    check("format validation error is useful", dispatch["rejected"]["message"] == "content is not a PNG image",
+    check("format validation refuses a contradictory kind before reading", dispatch["rejected"] == {
+        "code": "invalid_arguments", "message": "kind must match the file extension"},
           dispatch["rejected"])
     check("pagination returns disjoint pages", not set(dispatch["list_first_page"]) & set(dispatch["list_second_page"]),
           [dispatch["list_first_page"], dispatch["list_second_page"]])
