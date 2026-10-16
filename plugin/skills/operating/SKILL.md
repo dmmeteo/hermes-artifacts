@@ -23,7 +23,7 @@ One shared, private library holds every artifact. No agent or profile owns it. `
 
 - `artifact_list`: newest first, metadata only. Filters `query` (title), `kind`, `profile` (attribution). `limit` up to 100; pass `next_cursor` back as `cursor` until it is null.
 - `artifact_get`: metadata, every share with status (`active`, `expired`, `revoked`) and a text preview for html, markdown and svg.
-- `artifact_download`: writes the original bytes to `path`; refuses to overwrite unless `overwrite` is true.
+- `artifact_download`: writes the original bytes atomically to the resolved `path`. It follows Hermes's write policy and refuses destinations requiring approval. `overwrite` permits replacing an allowed existing file, not granting approval.
 
 ## Revoke and expiry
 
@@ -37,9 +37,9 @@ One shared, private library holds every artifact. No agent or profile owns it. `
 - `unauthorized`: the configured token was rejected; the operator must fix it.
 - `invalid_artifact`: wrong kind for the bytes, empty content or a bad title.
 - `too_large`: the content exceeds the service limit (10 MiB default).
-- `invalid_arguments`: the tool call itself is wrong (for example both or neither of `path` and `content`, an unknown extension, or a file that does not exist).
+- `invalid_arguments`: the tool call is invalid, the resolved file path is refused by Hermes, or the filesystem operation failed. Publishing by path requires a supported extension and an explicit `kind` must match it. Choose an allowed path or fix the arguments.
 - `not_found`: unknown id, slug or share id.
 
 ## Secrets
 
-The service token lives in the profile environment. Never print it, put it in a URL, write it to a file or pass it to a tool. Treat guest URLs as secrets too: share them only with the user who asked, and do not paste them into artifacts, logs or other channels.
+The client resolves the service URL and token through Hermes's active secret scope. Never print the token, put it in a URL, write it to a file or pass it to a tool. Treat guest URLs as secrets too: share them only with the user who asked, and do not paste them into artifacts, logs or other channels.

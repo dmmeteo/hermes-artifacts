@@ -143,7 +143,7 @@ def test_publish_requires_exactly_one_source(tools, configured, tmp_path):
     unknown = tmp_path / "notes.txt"
     unknown.write_text("x")
     assert call(tools, "artifact_publish", {"title": "x", "path": str(unknown)})["error"]["message"] == (
-        "cannot infer kind from the file extension; pass kind")
+        "unsupported file extension; use HTML, Markdown, SVG, PNG or WebP")
 
 
 def test_publish_share_revoke_roundtrip(tools, configured, tmp_path):

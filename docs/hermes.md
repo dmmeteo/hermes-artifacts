@@ -20,6 +20,10 @@ Tested with Hermes 0.21.x on its Python 3.11 runtime. Hermes's plugin contract i
 
 Several profiles can point at the same service. They all see one library; `source_profile` records which profile published each artifact.
 
+The plugin's install name is `artifacts`, matching its manifest and `artifacts:operating` skill namespace.
+It conflicts with the catalog's `artifact-relay` plugin because both register `artifact_publish`. Enable only one of them.
+Both `HERMES_ARTIFACTS_URL` and `HERMES_ARTIFACTS_TOKEN` are required. The client resolves them through Hermes's active secret scope.
+
 Uninstall: remove `artifacts` from `plugins.enabled`, delete the plugin directory and restart the dashboard. The service and its data are unaffected.
 
 ## Agent tools
@@ -31,11 +35,15 @@ All tools are in the `artifacts` toolset. Hermes defers plugin tools behind Tool
 | `artifact_publish` | Save a file (`path`) or inline text (`content` + `kind`) privately. The kind is inferred from `.html .htm .md .markdown .svg .png .webp`. Returns the artifact and its dashboard path. Creates no link. |
 | `artifact_list` | Newest first, metadata only. Filters `query` (title), `kind`, `profile`; `limit` up to 100 with `cursor` pagination. |
 | `artifact_get` | Metadata, all shares with status, and a text preview for HTML, Markdown and SVG. |
-| `artifact_download` | Write the original bytes to a local path (`overwrite` to replace). |
+| `artifact_download` | Write the original bytes atomically to a resolved local path (`overwrite` to replace an existing file). Hermes write denials and approval requirements still apply. |
 | `artifact_share` | Create one guest link. `expires_in_hours` defaults to 168, maximum 8760. The URL is returned once. |
 | `artifact_revoke_share` | Revoke one link by `share.id`. Other links to the same artifact keep working. |
 
 The plugin also registers the read-only skill `artifacts:operating` (`plugin/skills/operating/SKILL.md`). `skills_list` shows it and `skill_view('artifacts:operating')` loads it. It is not copied into `<HERMES_HOME>/skills`.
+
+Publishing by path checks Hermes's read policy on the resolved file before reading it. The resolved file must have one of the supported extensions above. An explicit `kind` must match that extension.
+Downloads check Hermes's write policy on the resolved destination, including symlink targets. The tool refuses paths that need write approval because it has no approval channel. `overwrite=true` only permits replacing an ordinary existing file.
+These checks follow the host's policy, which is defense in depth rather than filesystem isolation. They do not confine all access to the working directory. Other local processes can still change files or directories while a tool runs.
 
 Sharing only when the user asks is enforced by tool wording and by sharing being a separate call, not by policy. Every share is visible and revocable in the dashboard.
 

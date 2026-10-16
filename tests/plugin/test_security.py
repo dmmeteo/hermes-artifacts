@@ -1,8 +1,6 @@
 """Security regressions through tool handlers and the real Hermes policy APIs."""
 
-import builtins
 import hashlib
-import json
 import os
 import subprocess
 import sys

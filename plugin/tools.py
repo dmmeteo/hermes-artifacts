@@ -7,6 +7,7 @@ import math
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -58,7 +59,7 @@ def _tool(fn: Callable[[ArtifactService, dict, dict], dict]) -> Callable[..., st
             return _ok(fn(service, args or {}, kwargs))
         except ServiceError as exc:
             return json.dumps(exc.to_json())
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             return _fail(str(exc))
 
     handler.__name__ = fn.__name__
@@ -71,15 +72,20 @@ def _read_source(args: dict) -> tuple[bytes, str]:
         raise ValueError("provide exactly one of 'path' or 'content'")
     kind = (args.get("kind") or "").strip().lower()
     if path:
-        file = Path(os.path.expanduser(str(path)))
+        from agent.file_safety import raise_if_read_blocked
+
+        file = Path(str(path)).expanduser().resolve()
+        raise_if_read_blocked(str(file))
+        inferred = EXTENSION_KINDS.get(file.suffix.lower())
+        if not inferred:
+            raise ValueError("unsupported file extension; use HTML, Markdown, SVG, PNG or WebP")
+        if kind and kind != inferred:
+            raise ValueError("kind must match the file extension")
         if not file.is_file():
             raise ValueError(f"file not found: {file}")
         if file.stat().st_size > MAX_UPLOAD_BYTES:
             raise ValueError(f"file exceeds the {MAX_UPLOAD_BYTES} byte limit")
-        kind = kind or EXTENSION_KINDS.get(file.suffix.lower(), "")
-        if not kind:
-            raise ValueError("cannot infer kind from the file extension; pass kind")
-        return file.read_bytes(), kind
+        return file.read_bytes(), inferred
     if kind not in TEXT_KINDS:
         raise ValueError("inline content needs kind html, markdown or svg; publish images by path")
     return str(content).encode("utf-8"), kind
@@ -125,14 +131,31 @@ def get_artifact(service: ArtifactService, args: dict, context: dict) -> dict:
 
 @_tool
 def download(service: ArtifactService, args: dict, context: dict) -> dict:
-    target = Path(os.path.expanduser(str(args.get("path") or "")))
+    from agent.file_safety import get_write_denied_error, is_write_approval_required
+
     if not str(args.get("path") or "").strip():
         raise ValueError("path is required")
+    target = Path(str(args["path"])).expanduser().resolve()
+    denied = get_write_denied_error(str(target))
+    if denied:
+        raise ValueError(denied)
+    if is_write_approval_required(str(target)):
+        raise ValueError("destination requires write approval; artifact_download cannot grant approval")
     if target.exists() and not args.get("overwrite"):
         raise ValueError(f"{target} exists; pass overwrite=true to replace it")
     reply = service.download(str(args.get("artifact_id") or ""))
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(reply.body)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix=f".{target.name}.", delete=False) as file:
+            temporary = Path(file.name)
+            file.write(reply.body)
+        if target.exists() and not args.get("overwrite"):
+            raise ValueError(f"{target} exists; pass overwrite=true to replace it")
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return {"path": str(target), "byte_length": len(reply.body),
             "sha256": hashlib.sha256(reply.body).hexdigest()}
 
@@ -172,10 +195,10 @@ TOOLS = [
                        "self-contained HTML (inline CSS/JS only, no external URLs), Markdown, SVG, PNG and WebP. "
                        "Publishing is private and creates no guest link. " + GUIDE,
         "parameters": {"type": "object", "properties": {
-            "path": {"type": "string", "description": "Absolute path of a local file to publish."},
+            "path": {"type": "string", "description": "Local file with a supported extension, allowed by Hermes read policy."},
             "content": {"type": "string", "description": "Inline text content (html, markdown or svg)."},
             "kind": {"type": "string", "enum": ["html", "markdown", "svg", "png", "webp"],
-                     "description": "Format. Inferred from the file extension when publishing by path."},
+                     "description": "Format. Inferred from the resolved file extension by path; must match it if supplied."},
             "title": {"type": "string", "description": "Human-readable title (max 200 characters)."},
         }, "required": ["title"]},
     }),
@@ -197,11 +220,12 @@ TOOLS = [
     }),
     ("artifact_download", download, "⬇️", {
         "name": "artifact_download",
-        "description": "Write an artifact's original bytes to a local file.",
+        "description": "Write an artifact's original bytes atomically to a resolved local file. "
+                       "Refuses Hermes-protected paths and paths requiring write approval.",
         "parameters": {"type": "object", "properties": {
             "artifact_id": _ID,
             "path": {"type": "string", "description": "Destination file path."},
-            "overwrite": {"type": "boolean", "description": "Replace an existing file."},
+            "overwrite": {"type": "boolean", "description": "Replace an existing allowed file. Does not grant write approval."},
         }, "required": ["artifact_id", "path"]},
     }),
     ("artifact_share", share, "🔗", {

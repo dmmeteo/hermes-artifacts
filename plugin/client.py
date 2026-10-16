@@ -1,7 +1,7 @@
 """Bounded, authenticated client for the artifact service (stdlib only, Python 3.11+).
 
-The service credential stays in the Hermes process environment. It is never
-returned to callers, logged, or placed in a URL.
+The service credential stays server-side. It is never returned to callers,
+logged, or placed in a URL.
 """
 
 from __future__ import annotations
@@ -55,7 +55,12 @@ class ArtifactService:
 
     @classmethod
     def from_env(cls) -> Optional["ArtifactService"]:
-        url, token = os.environ.get(URL_ENV, "").strip(), os.environ.get(TOKEN_ENV, "").strip()
+        try:
+            from agent.secret_scope import get_secret
+        except ImportError:
+            get_secret = os.environ.get
+        url = get_secret(URL_ENV, "").strip()
+        token = get_secret(TOKEN_ENV, "").strip()
         return cls(url, token) if url and token else None
 
     def __repr__(self) -> str:
