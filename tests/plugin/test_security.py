@@ -180,6 +180,21 @@ def test_unscoped_multiplex_denial_propagates(tools, configured, multiplex_scope
         call(tools, "artifact_list", {})
 
 
+@pytest.mark.parametrize("name", ["artifact_publish", "artifact_download"])
+def test_raw_namespace_paths_are_refused_before_resolution(tools, configured, monkeypatch, name):
+    raw = r"\\?\UNC\fixture.invalid\share\report.md"
+    resolve = Path.resolve
+
+    def refuse_namespace_resolution(path, *args, **kwargs):
+        if str(path) == raw:
+            pytest.fail("unsafe namespace reached path resolution")
+        return resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", refuse_namespace_resolution)
+    result = call(tools, name, {"path": raw, "kind": "markdown", "title": "Refused", "artifact_id": "fixture"})
+    assert "NT" in result["error"]["message"]
+
+
 def test_standalone_secret_fallback_without_hermes(tmp_path):
     code = """
 import importlib.util, os, sys
